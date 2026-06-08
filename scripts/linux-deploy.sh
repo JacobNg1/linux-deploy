@@ -120,28 +120,47 @@ get_cat_name() {
 
 # 读取单个按键 (支持方向键)
 read_key() {
+    local key key2 key3
     IFS= read -rs -n1 key
+
+    # 方向键 ESC 序列
     if [[ "$key" == $'\x1b' ]]; then
-        IFS= read -rs -n1 key2
-        if [[ "$key2" == "[" ]]; then
-            IFS= read -rs -n1 key3
-            case "$key3" in
-                A) echo "UP" ;;
-                B) echo "DOWN" ;;
-                *) echo "UNKNOWN" ;;
-            esac
-        else
-            echo "ESC"
+        # 等待后续字符，设置超时避免阻塞
+        if IFS= read -rs -t 0.05 -n1 key2; then
+            if [[ "$key2" == "[" ]]; then
+                if IFS= read -rs -t 0.05 -n1 key3; then
+                    case "$key3" in
+                        A) echo "UP" ;;
+                        B) echo "DOWN" ;;
+                        *) echo "UNKNOWN" ;;
+                    esac
+                    return
+                fi
+            fi
         fi
-    elif [[ "$key" == " " ]]; then
-        echo "SPACE"
-    elif [[ "$key" == $'\n' ]] || [[ "$key" == $'\r' ]]; then
-        echo "ENTER"
-    elif [[ "$key" == "q" ]] || [[ "$key" == "Q" ]]; then
-        echo "QUIT"
-    else
-        echo "$key"
+        echo "ESC"
+        return
     fi
+
+    # 空格
+    if [[ "$key" == " " ]]; then
+        echo "SPACE"
+        return
+    fi
+
+    # Enter (\n 或 \r)
+    if [[ "$key" == $'\n' ]] || [[ "$key" == $'\r' ]] || [[ "$key" == "" ]]; then
+        echo "ENTER"
+        return
+    fi
+
+    # q 退出
+    if [[ "$key" == "q" ]] || [[ "$key" == "Q" ]]; then
+        echo "QUIT"
+        return
+    fi
+
+    echo "UNKNOWN"
 }
 
 render_menu() {
@@ -226,6 +245,9 @@ show_interactive_menu() {
                 tput cnorm
                 echo -e "${YELLOW}[!] 已取消部署${RESET}"
                 exit 0
+                ;;
+            "UNKNOWN")
+                # 忽略无法识别的按键，不渲染
                 ;;
         esac
     done
