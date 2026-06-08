@@ -81,93 +81,163 @@ append_to_bashrc() {
     fi
 }
 
-# ==================== 菜单交互 ====================
+# ==================== 交互式菜单 (支持方向键+空格) ====================
 
-# 状态数组：索引 -> 选中状态(1/0)
+# 选项定义: 索引|类别|名称|执行函数
+# 类别: 1=软件安装, 2=快捷方式, 3=其他
+OPTIONS=(
+    "1|1|安装 nano"
+    "2|1|安装 fastfetch"
+    "3|1|安装 curl"
+    "4|1|安装 git"
+    "5|2|登录时自动运行 fastfetch"
+    "6|2|登录时自动挂载 NAS"
+    "7|2|登录时自动同步 hosts"
+    "8|2|登录时自动扫描 SSH 设备"
+    "9|3|批量安装 packages.txt"
+)
+
+# 选中状态数组
 declare -a CHECKED
+declare -i CURSOR=0
 
-print_category() {
-    echo -e "\n${CYAN}>>> $1${RESET}"
+get_option_name() {
+    echo "${OPTIONS[$1]#*|*|}"
 }
 
-print_option() {
-    local idx="$1"
-    local name="$2"
-    local mark="${CHECKED[$idx]:-0}"
-    if [ "$mark" = "1" ]; then
-        echo -e "  [${GREEN}✓${RESET}] $idx. $name"
+get_option_cat() {
+    echo "${OPTIONS[$1]#*|}"
+    echo "${OPTIONS[$1]%%|*}"
+}
+
+get_cat_name() {
+    case "$1" in
+        1) echo "【软件安装】" ;;
+        2) echo "【快捷方式 / 自启动】" ;;
+        3) echo "【其他配置】" ;;
+    esac
+}
+
+# 读取单个按键 (支持方向键)
+read_key() {
+    IFS= read -rs -n1 key
+    if [[ "$key" == $'\x1b' ]]; then
+        IFS= read -rs -n1 key2
+        if [[ "$key2" == "[" ]]; then
+            IFS= read -rs -n1 key3
+            case "$key3" in
+                A) echo "UP" ;;
+                B) echo "DOWN" ;;
+                *) echo "UNKNOWN" ;;
+            esac
+        else
+            echo "ESC"
+        fi
+    elif [[ "$key" == " " ]]; then
+        echo "SPACE"
+    elif [[ "$key" == $'\n' ]] || [[ "$key" == $'\r' ]]; then
+        echo "ENTER"
+    elif [[ "$key" == "q" ]] || [[ "$key" == "Q" ]]; then
+        echo "QUIT"
     else
-        echo -e "  [ ] $idx. $name"
+        echo "$key"
     fi
 }
 
-toggle_option() {
-    local idx="$1"
-    if [ "${CHECKED[$idx]:-0}" = "1" ]; then
-        CHECKED[$idx]=0
-    else
-        CHECKED[$idx]=1
-    fi
-}
+render_menu() {
+    # 移动光标到顶部（不需要 clear，避免闪烁）
+    tput cup 0 0
 
-# ==================== 主菜单 ====================
-
-show_menu() {
-    clear
     echo -e "${YELLOW}=================================${RESET}"
     echo -e "${YELLOW}      Jacob 设备自动化部署脚本     ${RESET}"
     echo -e "${YELLOW}=================================${RESET}"
+    echo -e "${BLUE}↑↓ 移动光标  |  空格 切换选中  |  Enter 确认部署  |  q 退出${RESET}"
+    echo
 
-    # 基础环境（自动执行，不询问）
-    setup_sources
-    setup_git
-    setup_bashrc_base
+    local last_cat=""
+    for i in "${!OPTIONS[@]}"; do
+        local opt="${OPTIONS[$i]}"
+        local cat_id="${opt#*|}"
+        cat_id="${cat_id%%|*}"
+        local name="${opt#*|*|}"
 
-    # 初始化所有选项为未选中
-    for i in {1..9}; do CHECKED[$i]=0; done
+        if [ "$cat_id" != "$last_cat" ]; then
+            echo -e "${CYAN}>>> $(get_cat_name "$cat_id")${RESET}"
+            last_cat="$cat_id"
+        fi
+
+        local marker="[ ]"
+        [ "${CHECKED[$i]:-0}" = "1" ] && marker="[${GREEN}✓${RESET}]"
+
+        if [ "$i" -eq "$CURSOR" ]; then
+            echo -e "  ${marker}${YELLOW} > $name${RESET}"
+        else
+            echo -e "  ${marker}   $name${RESET}"
+        fi
+    done
+
+    echo
+    echo -e "${BLUE}---------------------------------${RESET}"
+}
+
+show_interactive_menu() {
+    # 初始化
+    for i in "${!OPTIONS[@]}"; do CHECKED[$i]=0; done
+    CURSOR=0
+
+    # 保存屏幕并隐藏光标
+    tput smcup
+    tput civis
+
+    # 首次渲染
+    clear
+    render_menu
 
     while true; do
-        clear
-        echo -e "${YELLOW}=================================${RESET}"
-        echo -e "${YELLOW}      Jacob 设备自动化部署脚本     ${RESET}"
-        echo -e "${YELLOW}=================================${RESET}"
-        echo -e "${BLUE}请输入编号切换选项，输入 0 开始部署:${RESET}\n"
+        local key
+        key=$(read_key)
 
-        print_category "【软件安装】"
-        print_option 1 "安装 nano"
-        print_option 2 "安装 fastfetch (neofetch替代品)"
-        print_option 3 "安装 curl"
-        print_option 4 "安装 git"
-
-        print_category "【快捷方式 / 自启动】"
-        print_option 5 "登录时自动运行 fastfetch"
-        print_option 6 "登录时自动挂载 NAS"
-        print_option 7 "登录时自动同步 hosts"
-        print_option 8 "登录时自动扫描 SSH 设备"
-
-        print_category "【其他配置】"
-        print_option 9 "批量安装 packages.txt 中的软件"
-
-        echo
-        echo -e "${BLUE}---------------------------------${RESET}"
-        echo -e "${BLUE}提示: 输入数字切换选中，输入 0 确认部署${RESET}"
-        read -p "> " choice
-
-        case "$choice" in
-            1|2|3|4|5|6|7|8|9)
-                toggle_option "$choice"
+        case "$key" in
+            "UP")
+                if [ "$CURSOR" -gt 0 ]; then
+                    CURSOR=$((CURSOR - 1))
+                    render_menu
+                fi
                 ;;
-            0)
+            "DOWN")
+                if [ "$CURSOR" -lt $((${#OPTIONS[@]} - 1)) ]; then
+                    CURSOR=$((CURSOR + 1))
+                    render_menu
+                fi
+                ;;
+            "SPACE")
+                if [ "${CHECKED[$CURSOR]:-0}" = "1" ]; then
+                    CHECKED[$CURSOR]=0
+                else
+                    CHECKED[$CURSOR]=1
+                fi
+                render_menu
+                ;;
+            "ENTER")
                 break
                 ;;
-            *)
-                echo -e "${YELLOW}[!] 无效输入${RESET}"
-                sleep 0.5
+            "QUIT")
+                tput rmcup
+                tput cnorm
+                echo -e "${YELLOW}[!] 已取消部署${RESET}"
+                exit 0
                 ;;
         esac
     done
 
-    # ==================== 执行部署 ====================
+    # 恢复屏幕并显示光标
+    tput rmcup
+    tput cnorm
+}
+
+# ==================== 执行部署 ====================
+
+run_deploy() {
     echo
     echo -e "${GREEN}=================================${RESET}"
     echo -e "${GREEN}        开始执行部署...           ${RESET}"
@@ -175,29 +245,23 @@ show_menu() {
     echo
 
     # --- 软件安装 ---
-    if [ "${CHECKED[1]}" = "1" ]; then install_pkg nano; fi
-    if [ "${CHECKED[2]}" = "1" ]; then install_pkg fastfetch; fi
-    if [ "${CHECKED[3]}" = "1" ]; then install_pkg curl; fi
-    if [ "${CHECKED[4]}" = "1" ]; then install_pkg git; fi
+    [ "${CHECKED[0]:-0}" = "1" ] && install_pkg nano
+    [ "${CHECKED[1]:-0}" = "1" ] && install_pkg fastfetch
+    [ "${CHECKED[2]:-0}" = "1" ] && install_pkg curl
+    [ "${CHECKED[3]:-0}" = "1" ] && install_pkg git
 
     # --- 快捷方式 ---
-    if [ "${CHECKED[5]}" = "1" ]; then
-        append_to_bashrc "登录显示系统信息" "command -v fastfetch >/dev/null && fastfetch || command -v neofetch >/dev/null && neofetch"
-    fi
-    if [ "${CHECKED[6]}" = "1" ]; then
-        append_to_bashrc "登录自动挂载 NAS" "[ -x ~/scripts/check_nas.sh ] && ~/scripts/check_nas.sh -q"
-    fi
-    if [ "${CHECKED[7]}" = "1" ]; then
-        append_to_bashrc "登录自动同步 hosts" "[ -x ~/scripts/sync_hosts.sh ] && ~/scripts/sync_hosts.sh -q"
-    fi
-    if [ "${CHECKED[8]}" = "1" ]; then
-        append_to_bashrc "登录自动扫描 SSH 设备" "[ -x ~/scripts/lan_scan.sh ] && ~/scripts/lan_scan.sh"
-    fi
+    [ "${CHECKED[4]:-0}" = "1" ] && append_to_bashrc "登录显示系统信息" \
+        "command -v fastfetch >/dev/null && fastfetch || command -v neofetch >/dev/null && neofetch"
+    [ "${CHECKED[5]:-0}" = "1" ] && append_to_bashrc "登录自动挂载 NAS" \
+        "[ -x ~/scripts/check_nas.sh ] && ~/scripts/check_nas.sh -q"
+    [ "${CHECKED[6]:-0}" = "1" ] && append_to_bashrc "登录自动同步 hosts" \
+        "[ -x ~/scripts/sync_hosts.sh ] && ~/scripts/sync_hosts.sh -q"
+    [ "${CHECKED[7]:-0}" = "1" ] && append_to_bashrc "登录自动扫描 SSH 设备" \
+        "[ -x ~/scripts/lan_scan.sh ] && ~/scripts/lan_scan.sh"
 
     # --- 其他 ---
-    if [ "${CHECKED[9]}" = "1" ]; then
-        install_required_packages
-    fi
+    [ "${CHECKED[8]:-0}" = "1" ] && install_required_packages
 
     echo
     echo -e "${GREEN}=================================${RESET}"
@@ -232,6 +296,26 @@ install_required_packages() {
         done
         echo -e "${YELLOW}=================================${RESET}"
     fi
+}
+
+# ==================== 入口 ====================
+
+show_menu() {
+    clear
+    echo -e "${YELLOW}=================================${RESET}"
+    echo -e "${YELLOW}      Jacob 设备自动化部署脚本     ${RESET}"
+    echo -e "${YELLOW}=================================${RESET}"
+
+    # 基础环境（自动执行，不询问）
+    setup_sources
+    setup_git
+    setup_bashrc_base
+
+    # 交互式菜单
+    show_interactive_menu
+
+    # 执行部署
+    run_deploy
 }
 
 show_menu
