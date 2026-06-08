@@ -3,10 +3,13 @@
 # ============================================
 # Jacob Linux 一键在线部署脚本
 # 用法:
-#   1. 先设置环境变量: export GITEE_API_TOKEN=你的token
+#   1. 先设置环境变量:
+#      export GITEE_API_TOKEN=你的token
+#      export GITEE_BRANCH=main        # 可选，默认 main
+#
 #   2. 然后执行:
 #      curl -H "Authorization: token $GITEE_API_TOKEN" -fsSL \
-#        "https://gitee.com/api/v5/repos/jacob_ng/linux-deploy/contents/install.sh?ref=main" \
+#        "https://gitee.com/api/v5/repos/jacob_ng/linux-deploy/contents/install.sh?ref=${GITEE_BRANCH:-main}" \
 #        | python3 -c "import sys,json,base64; d=json.load(sys.stdin); print(base64.b64decode(d['content']).decode('utf-8'))" \
 #        > /tmp/linux-deploy-install.sh && bash /tmp/linux-deploy-install.sh
 #
@@ -36,7 +39,7 @@ RESET='\033[00m'
 # Gitee 仓库配置
 GITEE_OWNER="jacob_ng"
 GITEE_REPO="linux-deploy"
-GITEE_BRANCH="main"
+GITEE_BRANCH="${GITEE_BRANCH:-main}"
 
 # 本地部署目录
 DEPLOY_DIR="$HOME/linux-deploy"
@@ -64,6 +67,7 @@ fi
 
 echo -e "${BLUE}[*] Jacob Linux 一键在线部署脚本${RESET}"
 echo -e "${BLUE}[*] 仓库: $GITEE_OWNER/$GITEE_REPO${RESET}"
+echo -e "${BLUE}[*] 分支: $GITEE_BRANCH${RESET}"
 echo
 
 # 检查依赖
