@@ -13,8 +13,8 @@ YELLOW='\033[01;33m'
 RESET='\033[00m'
 
 # Gitee 仓库配置（用户需要修改这里）
-REPO_URL="https://gitee.com/YOUR_GITEE_USERNAME/linux-deploy"
-RAW_URL="https://gitee.com/YOUR_GITEE_USERNAME/linux-deploy/raw/main"
+REPO_URL="https://gitee.com/jacob_ng/linux-deploy"
+RAW_URL="https://gitee.com/jacob_ng/linux-deploy/raw/main"
 
 # 本地部署目录
 DEPLOY_DIR="$HOME/linux-deploy"
@@ -64,15 +64,15 @@ download_file() {
     fi
 }
 
-# 下载主脚本
-download_file "LinuxDeploy.sh" "$DEPLOY_DIR/LinuxDeploy.sh"
+# 下载主脚本（新路径：scripts/linux-deploy.sh）
+download_file "scripts/linux-deploy.sh" "$DEPLOY_DIR/linux-deploy.sh"
 
-# 下载子脚本
-download_file "check_nas.sh" "$SCRIPTS_DIR/check_nas.sh"
-download_file "sync_hosts.sh" "$SCRIPTS_DIR/sync_hosts.sh"
+# 下载子脚本（新路径：scripts/ 目录下）
+download_file "scripts/check_nas.sh" "$SCRIPTS_DIR/check_nas.sh"
+download_file "scripts/sync_hosts.sh" "$SCRIPTS_DIR/sync_hosts.sh"
 
-# 下载 packages.txt（如果仓库中有）
-if curl -fsSL -o "$DEPLOY_DIR/packages.txt" "$RAW_URL/packages.txt" 2>/dev/null; then
+# 下载 packages.txt（新路径：scripts/packages.txt）
+if curl -fsSL -o "$DEPLOY_DIR/packages.txt" "$RAW_URL/scripts/packages.txt" 2>/dev/null; then
     echo -e "${GREEN}[✓] packages.txt 下载成功${RESET}"
 else
     echo -e "${YELLOW}[!] 未找到 packages.txt，跳过${RESET}"
@@ -82,7 +82,7 @@ fi
 echo
 echo -e "${BLUE}[*] 开始执行部署...${RESET}"
 cd "$DEPLOY_DIR"
-bash "$DEPLOY_DIR/LinuxDeploy.sh"
+bash "$DEPLOY_DIR/linux-deploy.sh"
 
 echo
 echo -e "${GREEN}=================================${RESET}"

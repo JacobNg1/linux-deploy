@@ -1,0 +1,4 @@
+nano
+neofetch
+git
+curl
