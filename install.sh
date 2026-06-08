@@ -155,9 +155,7 @@ download_from_gitee_api "scripts/linux-deploy.sh" "$DEPLOY_DIR/linux-deploy.sh"
 # 下载子脚本
 download_from_gitee_api "scripts/check_nas.sh" "$SCRIPTS_DIR/check_nas.sh"
 download_from_gitee_api "scripts/sync_hosts.sh" "$SCRIPTS_DIR/sync_hosts.sh"
-
-# 下载 packages.txt
-download_from_gitee_api "scripts/packages.txt" "$DEPLOY_DIR/packages.txt" || true
+download_from_gitee_api "scripts/lan_scan.sh" "$SCRIPTS_DIR/lan_scan.sh"
 
 # 执行主部署脚本
 echo

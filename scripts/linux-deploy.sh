@@ -64,57 +64,55 @@ setup_bashrc_base() {
     if [ -f ~/.bashrc ]; then
         [ ! -f ~/.bashrc.bak_origin ] && cp ~/.bashrc ~/.bashrc.bak_origin
         sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' ~/.bashrc
-        sed -i "s/#alias ll='ls -l'/alias ll='ls -l'/" ~/.bashrc
-        sed -i "s/#alias la='ls -A'/alias la='ls -A'/" ~/.bashrc
-        sed -i "s/#alias l='ls -CF'/alias l='ls -CF'/" ~/.bashrc
     fi
 }
 
-append_to_bashrc() {
-    local comment="$1"
+# 统一写入 ~/.bashrc 的自定义脚本区块
+append_custom_to_bashrc() {
+    local tag="$1"
     local cmd="$2"
-    if [ -f ~/.bashrc ] && ! grep -f <(echo "$cmd") ~/.bashrc >/dev/null 2>&1; then
-        echo -e "\n# $comment\n$cmd" >> ~/.bashrc
-        echo -e "${GREEN}[✓] 已成功添加: $comment${RESET}"
-    else
-        echo -e "${YELLOW}[!] $comment 已经配置过，跳过${RESET}"
+    local marker="# $tag"
+
+    if [ -f ~/.bashrc ] && grep -Fxq "$cmd" ~/.bashrc 2>/dev/null; then
+        echo -e "${YELLOW}[!] $tag 已经配置过，跳过${RESET}"
+        return
     fi
+
+    # 确保区块头存在
+    if ! grep -Fxq "# 自定义脚本" ~/.bashrc 2>/dev/null; then
+        echo -e "\n# 自定义脚本" >> ~/.bashrc
+    fi
+
+    echo "$marker" >> ~/.bashrc
+    echo "$cmd" >> ~/.bashrc
+    echo -e "${GREEN}[✓] 已成功添加: $tag${RESET}"
 }
 
 # ==================== 交互式菜单 (支持方向键+空格) ====================
 
-# 选项定义: 索引|类别|名称|执行函数
-# 类别: 1=软件安装, 2=快捷方式, 3=其他
+# 选项定义: 索引|类别|名称
+# 类别: 1=软件安装, 2=快捷方式
 OPTIONS=(
-    "1|1|安装 nano"
-    "2|1|安装 fastfetch"
-    "3|1|安装 curl"
-    "4|1|安装 git"
-    "5|2|登录时自动运行 fastfetch"
-    "6|2|登录时自动挂载 NAS"
-    "7|2|登录时自动同步 hosts"
-    "8|2|登录时自动扫描 SSH 设备"
-    "9|3|批量安装 packages.txt"
+    "0|1|安装 nano"
+    "1|1|安装 fastfetch"
+    "2|1|安装 curl"
+    "3|1|安装 git"
+    "4|2|登录时自动运行 fastfetch"
+    "5|2|登录时自动挂载 NAS"
+    "6|2|登录时自动同步 hosts"
+    "7|2|登录时自动扫描 SSH 设备"
+    "8|2|启用 ll 快捷命令"
+    "9|2|添加 lan 快捷别名"
 )
 
 # 选中状态数组
 declare -a CHECKED
 declare -i CURSOR=0
 
-get_option_name() {
-    echo "${OPTIONS[$1]#*|*|}"
-}
-
-get_option_cat() {
-    echo "${OPTIONS[$1]#*|}"
-    echo "${OPTIONS[$1]%%|*}"
-}
-
 get_cat_name() {
     case "$1" in
         1) echo "【软件安装】" ;;
         2) echo "【快捷方式 / 自启动】" ;;
-        3) echo "【其他配置】" ;;
     esac
 }
 
@@ -125,7 +123,6 @@ read_key() {
 
     # 方向键 ESC 序列
     if [[ "$key" == $'\x1b' ]]; then
-        # 等待后续字符，设置超时避免阻塞
         if IFS= read -rs -t 0.05 -n1 key2; then
             if [[ "$key2" == "[" ]]; then
                 if IFS= read -rs -t 0.05 -n1 key3; then
@@ -142,19 +139,16 @@ read_key() {
         return
     fi
 
-    # 空格
     if [[ "$key" == " " ]]; then
         echo "SPACE"
         return
     fi
 
-    # Enter (\n 或 \r)
     if [[ "$key" == $'\n' ]] || [[ "$key" == $'\r' ]] || [[ "$key" == "" ]]; then
         echo "ENTER"
         return
     fi
 
-    # q 退出
     if [[ "$key" == "q" ]] || [[ "$key" == "Q" ]]; then
         echo "QUIT"
         return
@@ -164,7 +158,6 @@ read_key() {
 }
 
 render_menu() {
-    # 移动光标到顶部（不需要 clear，避免闪烁）
     tput cup 0 0
 
     echo -e "${YELLOW}=================================${RESET}"
@@ -200,15 +193,12 @@ render_menu() {
 }
 
 show_interactive_menu() {
-    # 初始化
     for i in "${!OPTIONS[@]}"; do CHECKED[$i]=0; done
     CURSOR=0
 
-    # 保存屏幕并隐藏光标
     tput smcup
     tput civis
 
-    # 首次渲染
     clear
     render_menu
 
@@ -247,12 +237,10 @@ show_interactive_menu() {
                 exit 0
                 ;;
             "UNKNOWN")
-                # 忽略无法识别的按键，不渲染
                 ;;
         esac
     done
 
-    # 恢复屏幕并显示光标
     tput rmcup
     tput cnorm
 }
@@ -273,51 +261,23 @@ run_deploy() {
     [ "${CHECKED[3]:-0}" = "1" ] && install_pkg git
 
     # --- 快捷方式 ---
-    [ "${CHECKED[4]:-0}" = "1" ] && append_to_bashrc "登录显示系统信息" \
+    [ "${CHECKED[4]:-0}" = "1" ] && append_custom_to_bashrc "显示系统信息" \
         "command -v fastfetch >/dev/null && fastfetch || command -v neofetch >/dev/null && neofetch"
-    [ "${CHECKED[5]:-0}" = "1" ] && append_to_bashrc "登录自动挂载 NAS" \
-        "[ -x ~/scripts/check_nas.sh ] && ~/scripts/check_nas.sh -q"
-    [ "${CHECKED[6]:-0}" = "1" ] && append_to_bashrc "登录自动同步 hosts" \
-        "[ -x ~/scripts/sync_hosts.sh ] && ~/scripts/sync_hosts.sh -q"
-    [ "${CHECKED[7]:-0}" = "1" ] && append_to_bashrc "登录自动扫描 SSH 设备" \
+    [ "${CHECKED[5]:-0}" = "1" ] && append_custom_to_bashrc "挂载nas" \
+        "[ -x ~/scripts/check_nas.sh ] && sudo ~/scripts/check_nas.sh -q"
+    [ "${CHECKED[6]:-0}" = "1" ] && append_custom_to_bashrc "同步hosts" \
+        "[ -x ~/scripts/sync_hosts.sh ] && sudo ~/scripts/sync_hosts.sh -q"
+    [ "${CHECKED[7]:-0}" = "1" ] && append_custom_to_bashrc "监测可ssh设备" \
         "[ -x ~/scripts/lan_scan.sh ] && ~/scripts/lan_scan.sh"
-
-    # --- 其他 ---
-    [ "${CHECKED[8]:-0}" = "1" ] && install_required_packages
+    [ "${CHECKED[8]:-0}" = "1" ] && append_custom_to_bashrc "ll快捷命令" \
+        "alias ll='ls -l'"
+    [ "${CHECKED[9]:-0}" = "1" ] && append_custom_to_bashrc "lan快捷别名" \
+        "alias lan='~/scripts/lan_scan.sh'"
 
     echo
     echo -e "${GREEN}=================================${RESET}"
     echo -e "${GREEN}  部署完成！请执行 'source ~/.bashrc' ${RESET}"
     echo -e "${GREEN}=================================${RESET}"
-}
-
-# 读取文件批量安装（packages.txt）
-install_required_packages() {
-    local pkg_file="$SCRIPT_DIR/packages.txt"
-    if [ ! -f "$pkg_file" ]; then
-        echo -e "${YELLOW}[!] 未找到 packages.txt ，跳过批量安装${RESET}"
-        return
-    fi
-
-    local failed_pkgs=()
-
-    echo -e "${BLUE}[*] 开始从 packages.txt 读取并检查必备包...${RESET}"
-    while IFS= read -r pkg || [ -n "$pkg" ]; do
-        [[ -z "$pkg" || "$pkg" =~ ^# ]] && continue
-        if ! install_pkg "$pkg"; then
-            failed_pkgs+=("$pkg")
-        fi
-    done < "$pkg_file"
-
-    if [ ${#failed_pkgs[@]} -gt 0 ]; then
-        echo
-        echo -e "${YELLOW}=================================${RESET}"
-        echo -e "${YELLOW}  以下软件包安装失败，请手动处理:${RESET}"
-        for fp in "${failed_pkgs[@]}"; do
-            echo -e "${YELLOW}    - $fp${RESET}"
-        done
-        echo -e "${YELLOW}=================================${RESET}"
-    fi
 }
 
 # ==================== 入口 ====================
@@ -328,15 +288,11 @@ show_menu() {
     echo -e "${YELLOW}      Jacob 设备自动化部署脚本     ${RESET}"
     echo -e "${YELLOW}=================================${RESET}"
 
-    # 基础环境（自动执行，不询问）
     setup_sources
     setup_git
     setup_bashrc_base
 
-    # 交互式菜单
     show_interactive_menu
-
-    # 执行部署
     run_deploy
 }
 

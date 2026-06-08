@@ -6,8 +6,12 @@ DEST="/etc/hosts"
 TMP="/tmp/hosts_clean"
 HOSTNAME=$(hostname)
 
-# 1. 前置检查 (必须以 root 运行)
-[ "$EUID" -ne 0 ] && echo "错误: 请使用 sudo 运行" && exit 1
+# 自动提权：如果当前不是 root，用 sudo 重新执行本脚本
+if [ "$EUID" -ne 0 ]; then
+    exec sudo "$0" "$@"
+fi
+
+# 1. 前置检查
 [ ! -f "$SRC" ]  && { [[ "$1" != "-q" ]] && echo "跳过: 源文件不存在"; exit 0; }
 [ ! -s "$SRC" ]  && echo "错误: 源文件为空" && exit 1
 
