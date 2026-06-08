@@ -5,12 +5,14 @@ set -e
 GREEN='\033[01;32m'
 BLUE='\033[01;34m'
 YELLOW='\033[01;33m'
+CYAN='\033[01;36m'
 RESET='\033[00m'
 
 # 脚本所在目录（兼容本地执行和在线下载执行）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# 自动检测系统并配置换源（已换源则不重复操作）
+# ==================== 基础功能 ====================
+
 setup_sources() {
     if [ -f /etc/debian_version ]; then
         if ! grep -q "mirrors.aliyun.com" /etc/apt/sources.list 2>/dev/null; then
@@ -36,49 +38,19 @@ setup_sources() {
     fi
 }
 
-# 读取文件批量安装（已安装的工具绝对不重复下载，失败自动跳过并报告）
-install_required_packages() {
-    local pkg_file="$SCRIPT_DIR/packages.txt"
-    if [ ! -f "$pkg_file" ]; then
-        echo -e "${YELLOW}[!] 未找到 packages.txt ，跳过批量安装${RESET}"
-        return
+install_pkg() {
+    local pkg="$1"
+    if command -v "$pkg" &> /dev/null; then
+        echo -e "${YELLOW}[!] $pkg 已存在，跳过安装${RESET}"
+        return 0
     fi
-
-    local failed_pkgs=()
-
-    echo -e "${BLUE}[*] 开始从 packages.txt 读取并检查必备包...${RESET}"
-    while IFS= read -r pkg || [ -n "$pkg" ]; do
-        # 忽略空行和注释
-        [[ -z "$pkg" || "$pkg" =~ ^# ]] && continue
-
-        if ! command -v "$pkg" &> /dev/null; then
-            echo -e "${BLUE}[*] 正在安装 $pkg...${RESET}"
-            local install_ok=false
-            if [ -f /etc/debian_version ]; then
-                sudo apt install -y "$pkg" && install_ok=true
-            elif [ -f /etc/redhat-release ]; then
-                sudo yum install -y "$pkg" && install_ok=true
-            fi
-
-            if [ "$install_ok" = false ]; then
-                echo -e "${YELLOW}[!] $pkg 安装失败，已跳过${RESET}"
-                failed_pkgs+=("$pkg")
-            fi
-        else
-            echo -e "${YELLOW}[!] $pkg 已存在，跳过安装${RESET}"
-        fi
-    done < "$pkg_file"
-
-    # 报告安装失败列表
-    if [ ${#failed_pkgs[@]} -gt 0 ]; then
-        echo
-        echo -e "${YELLOW}=================================${RESET}"
-        echo -e "${YELLOW}  以下软件包安装失败，请手动处理:${RESET}"
-        for fp in "${failed_pkgs[@]}"; do
-            echo -e "${YELLOW}    - $fp${RESET}"
-        done
-        echo -e "${YELLOW}=================================${RESET}"
+    echo -e "${BLUE}[*] 正在安装 $pkg...${RESET}"
+    if [ -f /etc/debian_version ]; then
+        sudo apt install -y "$pkg" && return 0
+    elif [ -f /etc/redhat-release ]; then
+        sudo yum install -y "$pkg" && return 0
     fi
+    return 1
 }
 
 setup_git() {
@@ -90,7 +62,6 @@ setup_git() {
 
 setup_bashrc_base() {
     if [ -f ~/.bashrc ]; then
-        # 避免重复备份
         [ ! -f ~/.bashrc.bak_origin ] && cp ~/.bashrc ~/.bashrc.bak_origin
         sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' ~/.bashrc
         sed -i "s/#alias ll='ls -l'/alias ll='ls -l'/" ~/.bashrc
@@ -102,14 +73,44 @@ setup_bashrc_base() {
 append_to_bashrc() {
     local comment="$1"
     local cmd="$2"
-
     if [ -f ~/.bashrc ] && ! grep -f <(echo "$cmd") ~/.bashrc >/dev/null 2>&1; then
         echo -e "\n# $comment\n$cmd" >> ~/.bashrc
         echo -e "${GREEN}[✓] 已成功添加: $comment${RESET}"
     else
-        echo -e "${YELLOW}[!] 提示：$comment 已经配置过，跳过不再重复写入${RESET}"
+        echo -e "${YELLOW}[!] $comment 已经配置过，跳过${RESET}"
     fi
 }
+
+# ==================== 菜单交互 ====================
+
+# 状态数组：索引 -> 选中状态(1/0)
+declare -a CHECKED
+
+print_category() {
+    echo -e "\n${CYAN}>>> $1${RESET}"
+}
+
+print_option() {
+    local idx="$1"
+    local name="$2"
+    local mark="${CHECKED[$idx]:-0}"
+    if [ "$mark" = "1" ]; then
+        echo -e "  [${GREEN}✓${RESET}] $idx. $name"
+    else
+        echo -e "  [ ] $idx. $name"
+    fi
+}
+
+toggle_option() {
+    local idx="$1"
+    if [ "${CHECKED[$idx]:-0}" = "1" ]; then
+        CHECKED[$idx]=0
+    else
+        CHECKED[$idx]=1
+    fi
+}
+
+# ==================== 主菜单 ====================
 
 show_menu() {
     clear
@@ -117,33 +118,120 @@ show_menu() {
     echo -e "${YELLOW}      Jacob 设备自动化部署脚本     ${RESET}"
     echo -e "${YELLOW}=================================${RESET}"
 
+    # 基础环境（自动执行，不询问）
     setup_sources
-    install_required_packages
     setup_git
     setup_bashrc_base
 
-    echo -e "\n${BLUE}请选择需要启用的自定义功能 (y/n):${RESET}"
+    # 初始化所有选项为未选中
+    for i in {1..9}; do CHECKED[$i]=0; done
 
-    read -p "1. 是否启用 [挂载NAS] 脚本? (y/n): " choice1
-    if [[ "$choice1" =~ ^[Yy]$ ]]; then
-        append_to_bashrc "挂载nas" "[ -x ~/scripts/check_nas.sh ] && ~/scripts/check_nas.sh -q"
+    while true; do
+        clear
+        echo -e "${YELLOW}=================================${RESET}"
+        echo -e "${YELLOW}      Jacob 设备自动化部署脚本     ${RESET}"
+        echo -e "${YELLOW}=================================${RESET}"
+        echo -e "${BLUE}请输入编号切换选项，输入 0 开始部署:${RESET}\n"
+
+        print_category "【软件安装】"
+        print_option 1 "安装 nano"
+        print_option 2 "安装 fastfetch (neofetch替代品)"
+        print_option 3 "安装 curl"
+        print_option 4 "安装 git"
+
+        print_category "【快捷方式 / 自启动】"
+        print_option 5 "登录时自动运行 fastfetch"
+        print_option 6 "登录时自动挂载 NAS"
+        print_option 7 "登录时自动同步 hosts"
+        print_option 8 "登录时自动扫描 SSH 设备"
+
+        print_category "【其他配置】"
+        print_option 9 "批量安装 packages.txt 中的软件"
+
+        echo
+        echo -e "${BLUE}---------------------------------${RESET}"
+        echo -e "${BLUE}提示: 输入数字切换选中，输入 0 确认部署${RESET}"
+        read -p "> " choice
+
+        case "$choice" in
+            1|2|3|4|5|6|7|8|9)
+                toggle_option "$choice"
+                ;;
+            0)
+                break
+                ;;
+            *)
+                echo -e "${YELLOW}[!] 无效输入${RESET}"
+                sleep 0.5
+                ;;
+        esac
+    done
+
+    # ==================== 执行部署 ====================
+    echo
+    echo -e "${GREEN}=================================${RESET}"
+    echo -e "${GREEN}        开始执行部署...           ${RESET}"
+    echo -e "${GREEN}=================================${RESET}"
+    echo
+
+    # --- 软件安装 ---
+    if [ "${CHECKED[1]}" = "1" ]; then install_pkg nano; fi
+    if [ "${CHECKED[2]}" = "1" ]; then install_pkg fastfetch; fi
+    if [ "${CHECKED[3]}" = "1" ]; then install_pkg curl; fi
+    if [ "${CHECKED[4]}" = "1" ]; then install_pkg git; fi
+
+    # --- 快捷方式 ---
+    if [ "${CHECKED[5]}" = "1" ]; then
+        append_to_bashrc "登录显示系统信息" "command -v fastfetch >/dev/null && fastfetch || command -v neofetch >/dev/null && neofetch"
+    fi
+    if [ "${CHECKED[6]}" = "1" ]; then
+        append_to_bashrc "登录自动挂载 NAS" "[ -x ~/scripts/check_nas.sh ] && ~/scripts/check_nas.sh -q"
+    fi
+    if [ "${CHECKED[7]}" = "1" ]; then
+        append_to_bashrc "登录自动同步 hosts" "[ -x ~/scripts/sync_hosts.sh ] && ~/scripts/sync_hosts.sh -q"
+    fi
+    if [ "${CHECKED[8]}" = "1" ]; then
+        append_to_bashrc "登录自动扫描 SSH 设备" "[ -x ~/scripts/lan_scan.sh ] && ~/scripts/lan_scan.sh"
     fi
 
-    read -p "2. 是否启用 [同步hosts] 脚本? (y/n): " choice2
-    if [[ "$choice2" =~ ^[Yy]$ ]]; then
-        append_to_bashrc "同步hosts" "[ -x ~/scripts/sync_hosts.sh ] && ~/scripts/sync_hosts.sh -q"
+    # --- 其他 ---
+    if [ "${CHECKED[9]}" = "1" ]; then
+        install_required_packages
     fi
 
-    read -p "3. 是否启用 [监测可ssh设备] 脚本? (y/n): " choice3
-    if [[ "$choice3" =~ ^[Yy]$ ]]; then
-        append_to_bashrc "监测可ssh设备" "[ -x ~/scripts/lan_scan.sh ] && ~/scripts/lan_scan.sh"
-    fi
-
-    append_to_bashrc "显示系统信息" "command -v neofetch >/dev/null && neofetch"
-
-    echo -e "\n${GREEN}=================================${RESET}"
+    echo
+    echo -e "${GREEN}=================================${RESET}"
     echo -e "${GREEN}  部署完成！请执行 'source ~/.bashrc' ${RESET}"
     echo -e "${GREEN}=================================${RESET}"
+}
+
+# 读取文件批量安装（packages.txt）
+install_required_packages() {
+    local pkg_file="$SCRIPT_DIR/packages.txt"
+    if [ ! -f "$pkg_file" ]; then
+        echo -e "${YELLOW}[!] 未找到 packages.txt ，跳过批量安装${RESET}"
+        return
+    fi
+
+    local failed_pkgs=()
+
+    echo -e "${BLUE}[*] 开始从 packages.txt 读取并检查必备包...${RESET}"
+    while IFS= read -r pkg || [ -n "$pkg" ]; do
+        [[ -z "$pkg" || "$pkg" =~ ^# ]] && continue
+        if ! install_pkg "$pkg"; then
+            failed_pkgs+=("$pkg")
+        fi
+    done < "$pkg_file"
+
+    if [ ${#failed_pkgs[@]} -gt 0 ]; then
+        echo
+        echo -e "${YELLOW}=================================${RESET}"
+        echo -e "${YELLOW}  以下软件包安装失败，请手动处理:${RESET}"
+        for fp in "${failed_pkgs[@]}"; do
+            echo -e "${YELLOW}    - $fp${RESET}"
+        done
+        echo -e "${YELLOW}=================================${RESET}"
+    fi
 }
 
 show_menu
