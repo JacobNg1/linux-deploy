@@ -1,4 +1,4 @@
 nano
-neofetch
+fastfetch
 git
 curl

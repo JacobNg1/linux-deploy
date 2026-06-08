@@ -36,13 +36,15 @@ setup_sources() {
     fi
 }
 
-# 读取文件批量安装（已安装的工具绝对不重复下载）
+# 读取文件批量安装（已安装的工具绝对不重复下载，失败自动跳过并报告）
 install_required_packages() {
     local pkg_file="$SCRIPT_DIR/packages.txt"
     if [ ! -f "$pkg_file" ]; then
         echo -e "${YELLOW}[!] 未找到 packages.txt ，跳过批量安装${RESET}"
         return
     fi
+
+    local failed_pkgs=()
 
     echo -e "${BLUE}[*] 开始从 packages.txt 读取并检查必备包...${RESET}"
     while IFS= read -r pkg || [ -n "$pkg" ]; do
@@ -51,15 +53,32 @@ install_required_packages() {
 
         if ! command -v "$pkg" &> /dev/null; then
             echo -e "${BLUE}[*] 正在安装 $pkg...${RESET}"
+            local install_ok=false
             if [ -f /etc/debian_version ]; then
-                sudo apt install -y "$pkg"
+                sudo apt install -y "$pkg" && install_ok=true
             elif [ -f /etc/redhat-release ]; then
-                sudo yum install -y "$pkg"
+                sudo yum install -y "$pkg" && install_ok=true
+            fi
+
+            if [ "$install_ok" = false ]; then
+                echo -e "${YELLOW}[!] $pkg 安装失败，已跳过${RESET}"
+                failed_pkgs+=("$pkg")
             fi
         else
             echo -e "${YELLOW}[!] $pkg 已存在，跳过安装${RESET}"
         fi
     done < "$pkg_file"
+
+    # 报告安装失败列表
+    if [ ${#failed_pkgs[@]} -gt 0 ]; then
+        echo
+        echo -e "${YELLOW}=================================${RESET}"
+        echo -e "${YELLOW}  以下软件包安装失败，请手动处理:${RESET}"
+        for fp in "${failed_pkgs[@]}"; do
+            echo -e "${YELLOW}    - $fp${RESET}"
+        done
+        echo -e "${YELLOW}=================================${RESET}"
+    fi
 }
 
 setup_git() {
