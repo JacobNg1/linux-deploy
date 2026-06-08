@@ -4,7 +4,14 @@
 # Jacob Linux 一键在线部署脚本
 # 用法:
 #   1. 先设置环境变量: export GITEE_API_TOKEN=你的token
-#   2. 然后执行: curl -fsSL .../install.sh | bash
+#   2. 然后执行:
+#      curl -H "Authorization: token $GITEE_API_TOKEN" -fsSL \
+#        "https://gitee.com/api/v5/repos/jacob_ng/linux-deploy/contents/install.sh?ref=main" \
+#        | python3 -c "import sys,json,base64; d=json.load(sys.stdin); print(base64.b64decode(d['content']).decode('utf-8'))" \
+#        > /tmp/linux-deploy-install.sh && bash /tmp/linux-deploy-install.sh
+#
+#   注意: 必须使用 "先下载到文件再执行" 的方式，
+#         直接 "| bash" 会导致 read 无法获取键盘输入
 # ============================================
 
 clear
