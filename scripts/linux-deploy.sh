@@ -134,6 +134,13 @@ write_linux_deploy_block() {
         aliases_section+="alias lan='sudo ~/scripts/lan_scan.sh'\n"
         echo -e "${GREEN}[✓] 已添加: lan 快捷别名${RESET}"
     fi
+    if [ "${CHECKED[$((PKG_COUNT + 6))]:-0}" = "1" ]; then
+        aliases_section+="# 代理\nPROXY_NODE=http://tc:7890\n"
+        aliases_section+="alias pxon='export http_proxy=\"\$PROXY_NODE\"; export https_proxy=\"\$PROXY_NODE\"; echo \"Proxy On: \$PROXY_NODE\"'\n"
+        aliases_section+="alias pxoff='unset http_proxy; unset https_proxy; echo \"Proxy Off\"'\n"
+        aliases_section+="alias pxtest='curl -I https://www.google.com'\n"
+        echo -e "${GREEN}[✓] 已添加: 代理开关别名${RESET}"
+    fi
 
     # 如果没有任何内容，不写入区块
     if [ -z "$scripts_section" ] && [ -z "$aliases_section" ]; then
@@ -185,6 +192,7 @@ FIXED_OPTIONS=(
     "3|2|登录时自动扫描 SSH 设备"
     "4|3|ll、la、l (ls 列表快捷别名)"
     "5|3|lan (扫描局域网 SSH 设备)"
+    "6|3|pxon / pxoff / pxtest (代理开关)"
 )
 
 # 选中状态数组
@@ -342,6 +350,35 @@ show_interactive_menu() {
     tput cnorm
 }
 
+# ==================== 配置 sudoers 免密 ====================
+
+setup_sudoers() {
+    local sudoers_file="/etc/sudoers.d/linux_deploy"
+
+    if [ -f "$sudoers_file" ]; then
+        echo -e "${YELLOW}[!] sudoers 免密已配置，跳过${RESET}"
+        return
+    fi
+
+    echo -e "${BLUE}[*] 正在配置 passwordless sudo（需输入一次密码）...${RESET}"
+
+    sudo tee "$sudoers_file" > /dev/null <<EOF
+$USER ALL=(ALL) NOPASSWD: $HOME/scripts/check_nas.sh
+$USER ALL=(ALL) NOPASSWD: $HOME/scripts/sync_hosts.sh
+$USER ALL=(ALL) NOPASSWD: $HOME/scripts/lan_scan.sh
+EOF
+
+    sudo chmod 440 "$sudoers_file"
+
+    # 验证语法
+    if sudo visudo -c -f "$sudoers_file" 2>/dev/null; then
+        echo -e "${GREEN}[✓] sudoers 免密配置完成${RESET}"
+    else
+        echo -e "${YELLOW}[!] sudoers 语法错误，已删除${RESET}"
+        sudo rm -f "$sudoers_file"
+    fi
+}
+
 # ==================== 执行部署 ====================
 
 run_deploy() {
@@ -367,9 +404,12 @@ run_deploy() {
     # --- 写入 ~/.bashrc 区块 ---
     write_linux_deploy_block
 
+    # --- 配置 sudoers 免密 ---
+    setup_sudoers
+
     echo
     echo -e "${GREEN}=================================${RESET}"
-    echo -e "${GREEN}  部署完成！请执行 'source ~/.bashrc' ${RESET}"
+    echo -e "${GREEN}  部署完成！请执行 source ~/.bashrc ${RESET}"
     echo -e "${GREEN}=================================${RESET}"
 }
 
