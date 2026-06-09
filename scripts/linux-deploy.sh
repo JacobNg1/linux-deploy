@@ -66,39 +66,103 @@ setup_bashrc_base() {
         sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' ~/.bashrc
     fi
 
-    # 清理旧的 neofetch 相关内容
+    # 清理所有旧格式的自定义内容（包括各种历史版本）
     if [ -f ~/.bashrc ]; then
+        # 删除旧的 neofetch 相关内容
         sed -i '/command -v neofetch/d' ~/.bashrc
         sed -i '/# 显示系统信息/d' ~/.bashrc
         sed -i '/# 登录显示系统信息/d' ~/.bashrc
+
+        # 删除旧的单条注释+命令格式
+        sed -i '/# 挂载nas/d' ~/.bashrc
+        sed -i '/# 同步hosts/d' ~/.bashrc
+        sed -i '/# 监测可ssh设备/d' ~/.bashrc
+        sed -i '/# ll快捷命令/d' ~/.bashrc
+        sed -i '/# lan快捷别名/d' ~/.bashrc
+        sed -i '/# la快捷别名/d' ~/.bashrc
+        sed -i '/# l快捷别名/d' ~/.bashrc
+        sed -i '/# 登录自动挂载 NAS/d' ~/.bashrc
+        sed -i '/# 登录自动同步 hosts/d' ~/.bashrc
+        sed -i '/# 登录自动扫描 SSH 设备/d' ~/.bashrc
+        sed -i '/# 自定义脚本/d' ~/.bashrc
+        sed -i '/# linux-deploy 自定义脚本/d' ~/.bashrc
+
+        # 删除旧命令行
+        sed -i '/\[ -x ~\/scripts\/check_nas.sh \] && ~/d' ~/.bashrc
+        sed -i '/\[ -x ~\/scripts\/sync_hosts.sh \] && ~/d' ~/.bashrc
+        sed -i '/\[ -x ~\/scripts\/lan_scan.sh \] && ~/d' ~/.bashrc
+        sed -i '/alias lan=.*/d' ~/.bashrc
+
+        # 删除整个 linux-deploy 区块（如果有）
+        if grep -q "# linux-deploy-start" ~/.bashrc 2>/dev/null; then
+            sed -i '/# linux-deploy-start/,/# linux-deploy-end/d' ~/.bashrc
+        fi
     fi
 }
 
-# 统一写入 ~/.bashrc 的自定义脚本区块
-append_custom_to_bashrc() {
-    local tag="$1"
-    local cmd="$2"
-    local marker="# $tag"
+# 生成并写入 ~/.bashrc 的 linux-deploy 区块
+write_linux_deploy_block() {
+    local scripts_section=""
+    local aliases_section=""
 
-    if [ -f ~/.bashrc ] && grep -Fxq "$cmd" ~/.bashrc 2>/dev/null; then
-        echo -e "${YELLOW}[!] $tag 已经配置过，跳过${RESET}"
+    # --- 脚本执行区 ---
+    if [ "${CHECKED[4]:-0}" = "1" ]; then
+        scripts_section+="command -v fastfetch >/dev/null && fastfetch\n"
+        echo -e "${GREEN}[✓] 已添加: 登录显示系统信息${RESET}"
+    fi
+    if [ "${CHECKED[5]:-0}" = "1" ]; then
+        scripts_section+="[ -x ~/scripts/check_nas.sh ] && sudo ~/scripts/check_nas.sh -q\n"
+        echo -e "${GREEN}[✓] 已添加: 登录自动挂载 NAS${RESET}"
+    fi
+    if [ "${CHECKED[6]:-0}" = "1" ]; then
+        scripts_section+="[ -x ~/scripts/sync_hosts.sh ] && sudo ~/scripts/sync_hosts.sh -q\n"
+        echo -e "${GREEN}[✓] 已添加: 登录自动同步 hosts${RESET}"
+    fi
+    if [ "${CHECKED[7]:-0}" = "1" ]; then
+        scripts_section+="[ -x ~/scripts/lan_scan.sh ] && sudo ~/scripts/lan_scan.sh\n"
+        echo -e "${GREEN}[✓] 已添加: 登录自动扫描 SSH 设备${RESET}"
+    fi
+
+    # --- 快捷别名区 ---
+    if [ "${CHECKED[8]:-0}" = "1" ]; then
+        aliases_section+="alias ll='ls -alF'\n"
+        aliases_section+="alias la='ls -A'\n"
+        aliases_section+="alias l='ls -CF'\n"
+        echo -e "${GREEN}[✓] 已添加: ll、la、l 快捷别名${RESET}"
+    fi
+    if [ "${CHECKED[9]:-0}" = "1" ]; then
+        aliases_section+="alias lan='sudo ~/scripts/lan_scan.sh'\n"
+        echo -e "${GREEN}[✓] 已添加: lan 快捷别名${RESET}"
+    fi
+
+    # 如果没有任何内容，不写入区块
+    if [ -z "$scripts_section" ] && [ -z "$aliases_section" ]; then
+        echo -e "${YELLOW}[!] 未选择任何快捷方式，跳过写入 ~/.bashrc${RESET}"
         return
     fi
 
-    # 确保区块头存在
-    if ! grep -Fxq "# linux-deploy 自定义脚本" ~/.bashrc 2>/dev/null; then
-        echo -e "\n# linux-deploy 自定义脚本" >> ~/.bashrc
+    # 构建区块内容
+    local block="\n# linux-deploy-start\n"
+
+    if [ -n "$scripts_section" ]; then
+        block+="# --- 脚本自启动 ---\n${scripts_section}"
     fi
 
-    echo "$marker" >> ~/.bashrc
-    echo "$cmd" >> ~/.bashrc
-    echo -e "${GREEN}[✓] 已成功添加: $tag${RESET}"
+    if [ -n "$aliases_section" ]; then
+        block+="# --- 快捷别名 ---\n${aliases_section}"
+    fi
+
+    block+="# linux-deploy-end\n"
+
+    # 写入 ~/.bashrc
+    printf "%b" "$block" >> ~/.bashrc
+    echo -e "${GREEN}[✓] 已更新 ~/.bashrc 的 linux-deploy 区块${RESET}"
 }
 
 # ==================== 交互式菜单 (支持方向键+空格) ====================
 
 # 选项定义: 索引|类别|名称
-# 类别: 1=软件安装, 2=快捷方式
+# 类别: 1=软件安装, 2=脚本自启动, 3=快捷别名
 OPTIONS=(
     "0|1|安装 nano"
     "1|1|安装 fastfetch"
@@ -108,20 +172,19 @@ OPTIONS=(
     "5|2|登录时自动挂载 NAS"
     "6|2|登录时自动同步 hosts"
     "7|2|登录时自动扫描 SSH 设备"
-    "8|2|启用 ll 快捷命令"
-    "9|2|添加 lan 快捷别名"
-    "10|2|添加 la 快捷别名"
-    "11|2|添加 l 快捷别名"
+    "8|3|ll、la、l (ls 列表快捷别名)"
+    "9|3|lan (扫描局域网 SSH 设备)"
 )
 
-# 选中状态数组
-declare -a CHECKED
+# 默认全选
+declare -a CHECKED=(1 1 1 1 1 1 1 1 1 1)
 declare -i CURSOR=0
 
 get_cat_name() {
     case "$1" in
         1) echo "【软件安装】" ;;
-        2) echo "【快捷方式 / 自启动】" ;;
+        2) echo "【脚本自启动】" ;;
+        3) echo "【快捷别名】" ;;
     esac
 }
 
@@ -202,7 +265,7 @@ render_menu() {
 }
 
 show_interactive_menu() {
-    for i in "${!OPTIONS[@]}"; do CHECKED[$i]=0; done
+    # CHECKED 已在定义时默认全选
     CURSOR=0
 
     tput smcup
@@ -269,23 +332,8 @@ run_deploy() {
     [ "${CHECKED[2]:-0}" = "1" ] && install_pkg curl
     [ "${CHECKED[3]:-0}" = "1" ] && install_pkg git
 
-    # --- 快捷方式 ---
-    [ "${CHECKED[4]:-0}" = "1" ] && append_custom_to_bashrc "显示系统信息" \
-        "command -v fastfetch >/dev/null && fastfetch"
-    [ "${CHECKED[5]:-0}" = "1" ] && append_custom_to_bashrc "挂载nas" \
-        "sudo ~/scripts/check_nas.sh -q"
-    [ "${CHECKED[6]:-0}" = "1" ] && append_custom_to_bashrc "同步hosts" \
-        "sudo ~/scripts/sync_hosts.sh -q"
-    [ "${CHECKED[7]:-0}" = "1" ] && append_custom_to_bashrc "监测可ssh设备" \
-        "sudo ~/scripts/lan_scan.sh"
-    [ "${CHECKED[8]:-0}" = "1" ] && append_custom_to_bashrc "ll快捷命令" \
-        "alias ll='ls -alF'"
-    [ "${CHECKED[9]:-0}" = "1" ] && append_custom_to_bashrc "lan快捷别名" \
-        "alias lan='sudo ~/scripts/lan_scan.sh'"
-    [ "${CHECKED[10]:-0}" = "1" ] && append_custom_to_bashrc "la快捷别名" \
-        "alias la='ls -A'"
-    [ "${CHECKED[11]:-0}" = "1" ] && append_custom_to_bashrc "l快捷别名" \
-        "alias l='ls -CF'"
+    # --- 写入 ~/.bashrc 区块 ---
+    write_linux_deploy_block
 
     echo
     echo -e "${GREEN}=================================${RESET}"
