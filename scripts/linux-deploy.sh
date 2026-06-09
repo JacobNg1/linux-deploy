@@ -65,6 +65,13 @@ setup_bashrc_base() {
         [ ! -f ~/.bashrc.bak_origin ] && cp ~/.bashrc ~/.bashrc.bak_origin
         sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' ~/.bashrc
     fi
+
+    # 清理旧的 neofetch 相关内容
+    if [ -f ~/.bashrc ]; then
+        sed -i '/command -v neofetch/d' ~/.bashrc
+        sed -i '/# 显示系统信息/d' ~/.bashrc
+        sed -i '/# 登录显示系统信息/d' ~/.bashrc
+    fi
 }
 
 # 统一写入 ~/.bashrc 的自定义脚本区块
@@ -79,8 +86,8 @@ append_custom_to_bashrc() {
     fi
 
     # 确保区块头存在
-    if ! grep -Fxq "# 自定义脚本" ~/.bashrc 2>/dev/null; then
-        echo -e "\n# 自定义脚本" >> ~/.bashrc
+    if ! grep -Fxq "# linux-deploy 自定义脚本" ~/.bashrc 2>/dev/null; then
+        echo -e "\n# linux-deploy 自定义脚本" >> ~/.bashrc
     fi
 
     echo "$marker" >> ~/.bashrc
@@ -103,6 +110,8 @@ OPTIONS=(
     "7|2|登录时自动扫描 SSH 设备"
     "8|2|启用 ll 快捷命令"
     "9|2|添加 lan 快捷别名"
+    "10|2|添加 la 快捷别名"
+    "11|2|添加 l 快捷别名"
 )
 
 # 选中状态数组
@@ -262,17 +271,21 @@ run_deploy() {
 
     # --- 快捷方式 ---
     [ "${CHECKED[4]:-0}" = "1" ] && append_custom_to_bashrc "显示系统信息" \
-        "command -v fastfetch >/dev/null && fastfetch || command -v neofetch >/dev/null && neofetch"
+        "command -v fastfetch >/dev/null && fastfetch"
     [ "${CHECKED[5]:-0}" = "1" ] && append_custom_to_bashrc "挂载nas" \
-        "[ -x ~/scripts/check_nas.sh ] && sudo ~/scripts/check_nas.sh -q"
+        "sudo ~/scripts/check_nas.sh -q"
     [ "${CHECKED[6]:-0}" = "1" ] && append_custom_to_bashrc "同步hosts" \
-        "[ -x ~/scripts/sync_hosts.sh ] && sudo ~/scripts/sync_hosts.sh -q"
+        "sudo ~/scripts/sync_hosts.sh -q"
     [ "${CHECKED[7]:-0}" = "1" ] && append_custom_to_bashrc "监测可ssh设备" \
-        "[ -x ~/scripts/lan_scan.sh ] && ~/scripts/lan_scan.sh"
+        "sudo ~/scripts/lan_scan.sh"
     [ "${CHECKED[8]:-0}" = "1" ] && append_custom_to_bashrc "ll快捷命令" \
-        "alias ll='ls -l'"
+        "alias ll='ls -alF'"
     [ "${CHECKED[9]:-0}" = "1" ] && append_custom_to_bashrc "lan快捷别名" \
-        "alias lan='~/scripts/lan_scan.sh'"
+        "alias lan='sudo ~/scripts/lan_scan.sh'"
+    [ "${CHECKED[10]:-0}" = "1" ] && append_custom_to_bashrc "la快捷别名" \
+        "alias la='ls -A'"
+    [ "${CHECKED[11]:-0}" = "1" ] && append_custom_to_bashrc "l快捷别名" \
+        "alias l='ls -CF'"
 
     echo
     echo -e "${GREEN}=================================${RESET}"
