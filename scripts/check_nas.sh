@@ -8,6 +8,15 @@ fi
 
 MOUNT_POINTS=("/mnt/nas" "/mnt/nas-2")
 
+# 自动提权：如果当前不是 root，用 sudo 重新执行本脚本
+if [ "$EUID" -ne 0 ]; then
+    if [ "$QUIET" = true ]; then
+        exec sudo "$0" -q
+    else
+        exec sudo "$0"
+    fi
+fi
+
 for MP in "${MOUNT_POINTS[@]}"
 do
     if mountpoint -q "$MP"; then
@@ -17,8 +26,8 @@ do
         fi
     else
         [ "$QUIET" = false ] && echo "[信息] $MP 未挂载，正在尝试挂载..."
-        
-        sudo mount "$MP" 2>/dev/null
+
+        mount "$MP" 2>/dev/null
 
         if mountpoint -q "$MP"; then
             echo -e "\e[32m[成功] $MP 挂载成功。\e[0m"

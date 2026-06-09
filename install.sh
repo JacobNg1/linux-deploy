@@ -1,11 +1,28 @@
 #!/bin/bash
 
+set -e
+
 # ============================================
 # Jacob Linux 一键在线部署脚本
 # 用法:
-#   1. 先设置环境变量: export GITEE_API_TOKEN=你的token
-#   2. 然后执行: curl -fsSL .../install.sh | bash
+#   1. 先设置环境变量:
+#      export GITEE_API_TOKEN=你的token
+#      export GITEE_BRANCH=main        # 可选，默认 main
+#
+#   2. 然后执行:
+#      curl -H "Authorization: token $GITEE_API_TOKEN" -fsSL \
+#        "https://gitee.com/api/v5/repos/jacob_ng/linux-deploy/contents/install.sh?ref=${GITEE_BRANCH:-main}" \
+#        | python3 -c "import sys,json,base64; d=json.load(sys.stdin); print(base64.b64decode(d['content']).decode('utf-8'))" \
+#        > /tmp/linux-deploy-install.sh && bash /tmp/linux-deploy-install.sh
+#
+#   注意: 必须使用 "先下载到文件再执行" 的方式，
+#         直接 "| bash" 会导致 read 无法获取键盘输入
 # ============================================
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RESET='\033[00m'
 
 clear
 echo -e "${GREEN}"
@@ -18,18 +35,10 @@ echo "   ╚════╝  ╚═╝  ╚═╝ ╚═════╝  ╚═�
 echo -e "${YELLOW}  =================== SYSTEM DEPLOY ===================${RESET}"
 echo
 
-
-set -e
-
-GREEN='\033[01;32m'
-BLUE='\033[01;34m'
-YELLOW='\033[01;33m'
-RESET='\033[00m'
-
 # Gitee 仓库配置
 GITEE_OWNER="jacob_ng"
 GITEE_REPO="linux-deploy"
-GITEE_BRANCH="main"
+GITEE_BRANCH="${GITEE_BRANCH:-main}"
 
 # 本地部署目录
 DEPLOY_DIR="$HOME/linux-deploy"
@@ -57,6 +66,7 @@ fi
 
 echo -e "${BLUE}[*] Jacob Linux 一键在线部署脚本${RESET}"
 echo -e "${BLUE}[*] 仓库: $GITEE_OWNER/$GITEE_REPO${RESET}"
+echo -e "${BLUE}[*] 分支: $GITEE_BRANCH${RESET}"
 echo
 
 # 检查依赖
@@ -141,12 +151,13 @@ except Exception as e:
 # 下载主脚本
 download_from_gitee_api "scripts/linux-deploy.sh" "$DEPLOY_DIR/linux-deploy.sh"
 
+# 下载 packages.txt（软件列表）
+download_from_gitee_api "scripts/packages.txt" "$DEPLOY_DIR/packages.txt" || true
+
 # 下载子脚本
 download_from_gitee_api "scripts/check_nas.sh" "$SCRIPTS_DIR/check_nas.sh"
 download_from_gitee_api "scripts/sync_hosts.sh" "$SCRIPTS_DIR/sync_hosts.sh"
-
-# 下载 packages.txt
-download_from_gitee_api "scripts/packages.txt" "$DEPLOY_DIR/packages.txt" || true
+download_from_gitee_api "scripts/lan_scan.sh" "$SCRIPTS_DIR/lan_scan.sh"
 
 # 执行主部署脚本
 echo
