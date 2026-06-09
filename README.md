@@ -1,39 +1,131 @@
 # Linux Deploy
 
-Jacob 设备自动化部署脚本，支持交互式菜单选择功能。
+Jacob 设备自动化部署脚本，支持键盘交互式菜单选择功能，从 Gitee 在线拉取一键部署。
 
 ## 快速启动
 
 ```bash
-export GITEE_API_TOKEN="aee0c6d82280dd56de52b4eab884cdfd"
-export GITEE_BRANCH="dev"
+export GITEE_API_TOKEN="你的Token"
+export GITEE_BRANCH="main"
 export R2_SCRIPT_URL="https://pub-b4b7de76533e439c9056fa7c1ce37150.r2.dev/b64json.py"
 
 curl -s $R2_SCRIPT_URL | python3 - "$GITEE_API_TOKEN" "${GITEE_BRANCH:-main}" \
   > /tmp/linux-deploy-install.sh && bash /tmp/linux-deploy-install.sh
 ```
 
-## 环境变量说明
+## 环境变量
 
-| 变量 | 必填 | 默认值 | 说明 |
-|------|------|--------|------|
-| `GITEE_API_TOKEN` | 是 | - | Gitee API Token，用于访问私有仓库 |
-| `GITEE_BRANCH` | 否 | `main` | 指定拉取的分支 |
-| `R2_SCRIPT_URL` | 是 | - | R2 上托管的 base64 解码脚本地址 |
+| 变量                | 必填 | 默认值    | 说明                  |
+| ----------------- | -- | ------ | ------------------- |
+| `GITEE_API_TOKEN` | 是  | -      | Gitee API Token     |
+| `GITEE_BRANCH`    | 否  | `main` | 拉取的分支               |
+| `R2_SCRIPT_URL`   | 是  | -      | R2 上托管的 base64 解码脚本 |
 
-## 功能菜单
+## 交互式菜单
 
-启动后进入交互式菜单，支持方向键 + 空格选择：
+启动后进入键盘交互式菜单，所有选项默认全选：
 
-- **软件安装**：nano、fastfetch、curl、git
-- **快捷方式**：登录时自动运行 fastfetch、挂载 NAS、同步 hosts、扫描 SSH 设备
-- **其他配置**：批量安装 packages.txt 中的软件
+```
+=================================
+      Jacob 设备自动化部署脚本
+=================================
+↑↓ 移动光标  |  空格 切换选中  |  Enter 确认部署  |  q 退出
+
+>>> 【软件安装】
+  [✓]   安装 nano
+  [✓]   安装 fastfetch
+  [✓]   安装 curl
+  [✓]   安装 git
+>>> 【脚本自启动】
+  [✓]   登录时自动运行 fastfetch
+  [✓]   登录时自动挂载 NAS
+  [✓]   登录时自动同步 hosts
+  [✓]   登录时自动扫描 SSH 设备
+>>> 【快捷别名】
+  [✓]   ll、la、l (ls 列表快捷别名)
+  [✓]   lan (扫描局域网 SSH 设备)
+  [✓]   pxon / pxoff / pxtest (代理开关)
+```
 
 操作方式：
-- `↑` / `↓`：移动光标
-- `空格`：切换选中/取消
-- `Enter`：确认部署
-- `q`：退出
+
+| 按键        | 功能      |
+| --------- | ------- |
+| `↑` / `↓` | 移动光标    |
+| `空格`      | 切换选中/取消 |
+| `Enter`   | 确认并开始部署 |
+| `q`       | 退出      |
+
+> 软件安装列表从 `scripts/packages.txt` 动态读取，修改该文件即可增减菜单中的安装项。
+
+## 部署输出示例
+
+```
+=================================
+       Jacob 设备自动化部署脚本
+=================================
+[!] APT 源已经是阿里云，跳过换源
+[*] 配置 Git 核心信息...
+
+=================================
+        开始执行部署...
+=================================
+
+[!] nano 已存在，跳过安装
+[!] fastfetch 已存在，跳过安装
+[!] git 已存在，跳过安装
+[!] curl 已存在，跳过安装
+[✓] 已添加: 登录显示系统信息
+[✓] 已添加: 登录自动挂载 NAS
+[✓] 已添加: 登录自动同步 hosts
+[✓] 已添加: 登录自动扫描 SSH 设备
+[✓] 已添加: ll、la、l 快捷别名
+[✓] 已添加: lan 快捷别名
+[✓] 已添加: 代理开关别名
+[✓] 已更新 ~/.bashrc 的 linux-deploy 区块
+[*] 正在配置 passwordless sudo（需输入一次密码）...
+[✓] sudoers 免密配置完成
+
+=================================
+  部署完成！请执行 source ~/.bashrc
+=================================
+```
+
+## sudoers 免密配置
+
+部署时自动创建 `/etc/sudoers.d/linux_deploy`，对以下脚本免密：
+
+```
+jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/check_nas.sh
+jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/sync_hosts.sh
+jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/lan_scan.sh
+```
+
+首次部署需输入一次 sudo 密码，之后所有脚本自动免密运行。语法自动校验，出错时自动回滚。
+
+## \~/.bashrc 写入格式
+
+所有自定义内容集中在 `# linux-deploy-start` / `# linux-deploy-end` 区块内，脚本可完整重写此区块：
+
+```bash
+# linux-deploy-start
+# --- 脚本自启动 ---
+command -v fastfetch >/dev/null && fastfetch
+[ -x ~/scripts/check_nas.sh ] && sudo ~/scripts/check_nas.sh -q
+[ -x ~/scripts/sync_hosts.sh ] && sudo ~/scripts/sync_hosts.sh -q
+[ -x ~/scripts/lan_scan.sh ] && sudo ~/scripts/lan_scan.sh
+# --- 快捷别名 ---
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias lan='sudo ~/scripts/lan_scan.sh'
+# 代理
+PROXY_NODE=http://tc:7890
+alias pxon='export http_proxy="$PROXY_NODE"; export https_proxy="$PROXY_NODE"; echo "Proxy On: $PROXY_NODE"'
+alias pxoff='unset http_proxy; unset https_proxy; echo "Proxy Off"'
+alias pxtest='curl -I https://www.google.com'
+# linux-deploy-end
+```
 
 ## 项目结构
 
@@ -44,13 +136,10 @@ linux-deploy/
 │   ├── linux-deploy.sh     # 主部署脚本（交互式菜单）
 │   ├── check_nas.sh        # NAS 挂载脚本（自动提权）
 │   ├── sync_hosts.sh       # Hosts 同步脚本（自动提权）
-│   └── packages.txt        # 批量安装包列表
+│   ├── lan_scan.sh         # 局域网 SSH 设备扫描
+│   └── packages.txt        # 软件安装列表（动态读取）
+├── .env                    # Gitee API Token（不上传仓库）
+├── .gitignore
 └── README.md
 ```
 
-## 自动提权说明
-
-`check_nas.sh` 和 `sync_hosts.sh` 已内置自动提权逻辑：
-- 检测到非 root 用户时，自动通过 `sudo` 重新执行自身
-- 无需手动输入 `sudo`，但首次运行可能需要输入密码
-- 建议配置 sudo 免密以完全自动化
