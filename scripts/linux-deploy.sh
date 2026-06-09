@@ -106,31 +106,31 @@ write_linux_deploy_block() {
     local aliases_section=""
 
     # --- 脚本执行区 ---
-    if [ "${CHECKED[4]:-0}" = "1" ]; then
+    if [ "${CHECKED[$((PKG_COUNT + 0))]:-0}" = "1" ]; then
         scripts_section+="command -v fastfetch >/dev/null && fastfetch\n"
         echo -e "${GREEN}[✓] 已添加: 登录显示系统信息${RESET}"
     fi
-    if [ "${CHECKED[5]:-0}" = "1" ]; then
+    if [ "${CHECKED[$((PKG_COUNT + 1))]:-0}" = "1" ]; then
         scripts_section+="[ -x ~/scripts/check_nas.sh ] && sudo ~/scripts/check_nas.sh -q\n"
         echo -e "${GREEN}[✓] 已添加: 登录自动挂载 NAS${RESET}"
     fi
-    if [ "${CHECKED[6]:-0}" = "1" ]; then
+    if [ "${CHECKED[$((PKG_COUNT + 2))]:-0}" = "1" ]; then
         scripts_section+="[ -x ~/scripts/sync_hosts.sh ] && sudo ~/scripts/sync_hosts.sh -q\n"
         echo -e "${GREEN}[✓] 已添加: 登录自动同步 hosts${RESET}"
     fi
-    if [ "${CHECKED[7]:-0}" = "1" ]; then
+    if [ "${CHECKED[$((PKG_COUNT + 3))]:-0}" = "1" ]; then
         scripts_section+="[ -x ~/scripts/lan_scan.sh ] && sudo ~/scripts/lan_scan.sh\n"
         echo -e "${GREEN}[✓] 已添加: 登录自动扫描 SSH 设备${RESET}"
     fi
 
     # --- 快捷别名区 ---
-    if [ "${CHECKED[8]:-0}" = "1" ]; then
+    if [ "${CHECKED[$((PKG_COUNT + 4))]:-0}" = "1" ]; then
         aliases_section+="alias ll='ls -alF'\n"
         aliases_section+="alias la='ls -A'\n"
         aliases_section+="alias l='ls -CF'\n"
         echo -e "${GREEN}[✓] 已添加: ll、la、l 快捷别名${RESET}"
     fi
-    if [ "${CHECKED[9]:-0}" = "1" ]; then
+    if [ "${CHECKED[$((PKG_COUNT + 5))]:-0}" = "1" ]; then
         aliases_section+="alias lan='sudo ~/scripts/lan_scan.sh'\n"
         echo -e "${GREEN}[✓] 已添加: lan 快捷别名${RESET}"
     fi
@@ -161,24 +161,49 @@ write_linux_deploy_block() {
 
 # ==================== 交互式菜单 (支持方向键+空格) ====================
 
-# 选项定义: 索引|类别|名称
-# 类别: 1=软件安装, 2=脚本自启动, 3=快捷别名
-OPTIONS=(
-    "0|1|安装 nano"
-    "1|1|安装 fastfetch"
-    "2|1|安装 curl"
-    "3|1|安装 git"
-    "4|2|登录时自动运行 fastfetch"
-    "5|2|登录时自动挂载 NAS"
-    "6|2|登录时自动同步 hosts"
-    "7|2|登录时自动扫描 SSH 设备"
-    "8|3|ll、la、l (ls 列表快捷别名)"
-    "9|3|lan (扫描局域网 SSH 设备)"
+# 从 packages.txt 动态加载软件安装选项
+load_package_options() {
+    local pkg_file="$SCRIPT_DIR/packages.txt"
+    local idx=0
+    local pkg
+    PKG_COUNT=0
+    [ ! -f "$pkg_file" ] && return
+    while IFS= read -r pkg || [ -n "$pkg" ]; do
+        [[ -z "$pkg" || "$pkg" =~ ^# ]] && continue
+        OPTIONS+=("$idx|1|安装 $pkg")
+        CHECKED+=(1)
+        idx=$((idx + 1))
+    done < "$pkg_file"
+    PKG_COUNT=$idx
+}
+
+# 固定选项（脚本自启动 + 快捷别名）
+FIXED_OPTIONS=(
+    "0|2|登录时自动运行 fastfetch"
+    "1|2|登录时自动挂载 NAS"
+    "2|2|登录时自动同步 hosts"
+    "3|2|登录时自动扫描 SSH 设备"
+    "4|3|ll、la、l (ls 列表快捷别名)"
+    "5|3|lan (扫描局域网 SSH 设备)"
 )
 
-# 默认全选
-declare -a CHECKED=(1 1 1 1 1 1 1 1 1 1)
+# 选中状态数组
+declare -a OPTIONS
+declare -a CHECKED
 declare -i CURSOR=0
+
+# 加载动态选项（在父 shell 中执行，直接操作 OPTIONS/CHECKED 数组）
+load_package_options
+
+# 追加固定选项（索引偏移 PKG_COUNT）
+for i in "${!FIXED_OPTIONS[@]}"; do
+    opt="${FIXED_OPTIONS[$i]}"
+    name="${opt#*|*|}"
+    cat_id="${opt#*|}"
+    cat_id="${cat_id%%|*}"
+    OPTIONS+=("$((PKG_COUNT + i))|${cat_id}|${name}")
+    CHECKED+=(1)
+done
 
 get_cat_name() {
     case "$1" in
@@ -326,11 +351,18 @@ run_deploy() {
     echo -e "${GREEN}=================================${RESET}"
     echo
 
-    # --- 软件安装 ---
-    [ "${CHECKED[0]:-0}" = "1" ] && install_pkg nano
-    [ "${CHECKED[1]:-0}" = "1" ] && install_pkg fastfetch
-    [ "${CHECKED[2]:-0}" = "1" ] && install_pkg curl
-    [ "${CHECKED[3]:-0}" = "1" ] && install_pkg git
+    # --- 软件安装 (从 packages.txt 动态读取) ---
+    local pkg_file="$SCRIPT_DIR/packages.txt"
+    if [ -f "$pkg_file" ]; then
+        local idx=0 pkg
+        while IFS= read -r pkg || [ -n "$pkg" ]; do
+            [[ -z "$pkg" || "$pkg" =~ ^# ]] && continue
+            if [ "${CHECKED[$idx]:-0}" = "1" ]; then
+                install_pkg "$pkg" || true
+            fi
+            idx=$((idx + 1))
+        done < "$pkg_file"
+    fi
 
     # --- 写入 ~/.bashrc 区块 ---
     write_linux_deploy_block
