@@ -166,6 +166,41 @@ write_linux_deploy_block() {
     echo -e "${GREEN}[✓] 已更新 ~/.bashrc 的 linux-deploy 区块${RESET}"
 }
 
+# 配置 Cloudflare R2（可选）
+configure_r2() {
+    echo
+    echo -e "${BLUE}[*] 配置 Cloudflare R2（可选）${RESET}"
+    echo -e "${BLUE}    用于从 R2 下载 hosts 等文件${RESET}"
+    read -p "是否现在配置 R2? (y/n，默认 n): " configure_now
+    if [[ "$configure_now" =~ ^[Yy]$ ]]; then
+        read -p "R2_ACCESS_KEY_ID: " r2_access_key_id
+        read -p "R2_SECRET_ACCESS_KEY: " r2_secret_access_key
+        read -p "R2_BUCKET_NAME: " r2_bucket_name
+        read -p "R2_ENDPOINT_URL: " r2_endpoint_url
+        read -p "R2_PUBLIC_URL: " r2_public_url
+    else
+        echo -e "${YELLOW}[!] 已跳过，将在 ~/.bashrc 中写入占位符，日后可手动修改${RESET}"
+        r2_access_key_id="YOUR_R2_ACCESS_KEY_ID"
+        r2_secret_access_key="YOUR_R2_SECRET_ACCESS_KEY"
+        r2_bucket_name="YOUR_R2_BUCKET_NAME"
+        r2_endpoint_url="YOUR_R2_ENDPOINT_URL"
+        r2_public_url="YOUR_R2_PUBLIC_URL"
+    fi
+
+    {
+        echo ""
+        echo "# Cloudflare R2 配置"
+        echo "# 如需修改，请编辑 ~/.bashrc 或使用 source ~/.bashrc 后重新登录"
+        echo "export R2_ACCESS_KEY_ID=$r2_access_key_id"
+        echo "export R2_SECRET_ACCESS_KEY=$r2_secret_access_key"
+        echo "export R2_BUCKET_NAME=$r2_bucket_name"
+        echo "export R2_ENDPOINT_URL=$r2_endpoint_url"
+        echo "export R2_PUBLIC_URL=$r2_public_url"
+    } >> "$HOME/.bashrc"
+
+    echo -e "${GREEN}[✓] R2 配置已写入 ~/.bashrc${RESET}"
+}
+
 # ==================== 交互式菜单 (支持方向键+空格) ====================
 
 # 从 packages.txt 动态加载软件安装选项
@@ -184,7 +219,7 @@ load_package_options() {
     PKG_COUNT=$idx
 }
 
-# 固定选项（脚本自启动 + 快捷别名）
+# 固定选项（脚本自启动 + 快捷别名 + 环境配置）
 FIXED_OPTIONS=(
     "0|2|登录时自动运行 fastfetch"
     "1|2|登录时自动挂载 NAS"
@@ -193,6 +228,7 @@ FIXED_OPTIONS=(
     "4|3|ll、la、l (ls 列表快捷别名)"
     "5|3|lan (扫描局域网 SSH 设备)"
     "6|3|pxon / pxoff / pxtest (代理开关)"
+    "7|4|配置 R2"
 )
 
 # 选中状态数组
@@ -218,6 +254,7 @@ get_cat_name() {
         1) echo "【软件安装】" ;;
         2) echo "【脚本自启动】" ;;
         3) echo "【快捷别名】" ;;
+        4) echo "【环境配置】" ;;
     esac
 }
 
@@ -403,6 +440,11 @@ run_deploy() {
 
     # --- 写入 ~/.bashrc 区块 ---
     write_linux_deploy_block
+
+    # --- 配置 R2 环境变量 ---
+    if [ "${CHECKED[$((PKG_COUNT + 7))]:-0}" = "1" ]; then
+        configure_r2
+    fi
 
     # --- 配置 sudoers 免密 ---
     setup_sudoers
