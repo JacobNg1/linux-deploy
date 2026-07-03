@@ -5,18 +5,10 @@ set -e
 # ============================================
 # Jacob Linux 一键在线部署脚本
 # 用法:
-#   1. 先设置环境变量:
-#      export GITEE_API_TOKEN=你的token
-#      export GITEE_BRANCH=main        # 可选，默认 main
+#   curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash
+#   curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/dev/install.sh" | bash -s dev
 #
-#   2. 然后执行:
-#      curl -H "Authorization: token $GITEE_API_TOKEN" -fsSL \
-#        "https://gitee.com/api/v5/repos/jacob_ng/linux-deploy/contents/install.sh?ref=${GITEE_BRANCH:-main}" \
-#        | python3 -c "import sys,json,base64; d=json.load(sys.stdin); print(base64.b64decode(d['content']).decode('utf-8'))" \
-#        > /tmp/linux-deploy-install.sh && bash /tmp/linux-deploy-install.sh
-#
-#   注意: 必须使用 "先下载到文件再执行" 的方式，
-#         直接 "| bash" 会导致 read 无法获取键盘输入
+#   分支优先级: 命令行参数 > 环境变量 GITEE_BRANCH > 默认 main
 # ============================================
 
 GREEN='\033[01;32m'
@@ -38,7 +30,8 @@ echo
 # Gitee 仓库配置
 GITEE_OWNER="jacob_ng"
 GITEE_REPO="linux-deploy"
-GITEE_BRANCH="${GITEE_BRANCH:-dev}"
+# 分支优先级: 命令行参数 > 环境变量 > 默认 main
+GITEE_BRANCH="${1:-${GITEE_BRANCH:-main}}"
 
 # 本地部署目录
 DEPLOY_DIR="$HOME/linux-deploy"
