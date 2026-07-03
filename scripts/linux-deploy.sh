@@ -39,8 +39,12 @@ setup_sources() {
 }
 
 install_pkg() {
-    local pkg="$1"
-    if command -v "$pkg" &> /dev/null; then
+    local input="$1"
+    local pkg="${input%%:*}"    # 包名（冒号前）
+    local cmd="${input#*:}"     # 命令名（冒号后，如果没有冒号则等于包名）
+    [ "$cmd" = "$input" ] && cmd="$pkg"
+    
+    if command -v "$cmd" &> /dev/null; then
         echo -e "${YELLOW}[!] $pkg 已存在，跳过安装${RESET}"
         return 0
     fi
