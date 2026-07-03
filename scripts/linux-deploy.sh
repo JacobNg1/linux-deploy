@@ -115,7 +115,7 @@ write_linux_deploy_block() {
         echo -e "${GREEN}[✓] 已添加: 登录自动挂载 NAS${RESET}"
     fi
     if [ "${CHECKED[$((PKG_COUNT + 2))]:-0}" = "1" ]; then
-        scripts_section+="[ -x ~/scripts/sync_hosts.sh ] && sudo ~/scripts/sync_hosts.sh -q\n"
+        scripts_section+="[ -x ~/scripts/sync_hosts.sh ] && sudo -E ~/scripts/sync_hosts.sh --source=r2 -q\n"
         echo -e "${GREEN}[✓] 已添加: 登录自动同步 hosts${RESET}"
     fi
     if [ "${CHECKED[$((PKG_COUNT + 3))]:-0}" = "1" ]; then
@@ -364,7 +364,7 @@ setup_sudoers() {
 
     sudo tee "$sudoers_file" > /dev/null <<EOF
 $USER ALL=(ALL) NOPASSWD: $HOME/scripts/check_nas.sh
-$USER ALL=(ALL) NOPASSWD: $HOME/scripts/sync_hosts.sh
+$USER ALL=(ALL) NOPASSWD: SETENV: $HOME/scripts/sync_hosts.sh
 $USER ALL=(ALL) NOPASSWD: $HOME/scripts/lan_scan.sh
 EOF
 
