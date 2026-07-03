@@ -508,28 +508,39 @@ show_interactive_menu() {
 
 setup_sudoers() {
     local sudoers_file="/etc/sudoers.d/linux_deploy"
+    local need_update=0
 
+    # 检查是否需要更新（文件不存在或缺少 SETENV）
     if [ -f "$sudoers_file" ]; then
-        echo -e "${YELLOW}[!] sudoers 免密已配置，跳过${RESET}"
-        return
+        if ! sudo grep -q "SETENV:" "$sudoers_file" 2>/dev/null; then
+            echo -e "${YELLOW}[!] sudoers 配置需要更新（添加 SETENV 权限）${RESET}"
+            need_update=1
+        else
+            echo -e "${YELLOW}[!] sudoers 免密已配置，跳过${RESET}"
+            return
+        fi
+    else
+        need_update=1
     fi
 
-    echo -e "${BLUE}[*] 正在配置 passwordless sudo（需输入一次密码）...${RESET}"
+    if [ "$need_update" = "1" ]; then
+        echo -e "${BLUE}[*] 正在配置 passwordless sudo（需输入一次密码）...${RESET}"
 
-    sudo tee "$sudoers_file" > /dev/null <<EOF
+        sudo tee "$sudoers_file" > /dev/null <<EOF
 $USER ALL=(ALL) NOPASSWD: $HOME/scripts/check_nas.sh
 $USER ALL=(ALL) NOPASSWD: SETENV: $HOME/scripts/sync_hosts.sh
 $USER ALL=(ALL) NOPASSWD: $HOME/scripts/lan_scan.sh
 EOF
 
-    sudo chmod 440 "$sudoers_file"
+        sudo chmod 440 "$sudoers_file"
 
-    # 验证语法
-    if sudo visudo -c -f "$sudoers_file" 2>/dev/null; then
-        echo -e "${GREEN}[✓] sudoers 免密配置完成${RESET}"
-    else
-        echo -e "${YELLOW}[!] sudoers 语法错误，已删除${RESET}"
-        sudo rm -f "$sudoers_file"
+        # 验证语法
+        if sudo visudo -c -f "$sudoers_file" 2>/dev/null; then
+            echo -e "${GREEN}[✓] sudoers 免密配置完成${RESET}"
+        else
+            echo -e "${YELLOW}[!] sudoers 语法错误，已删除${RESET}"
+            sudo rm -f "$sudoers_file"
+        fi
     fi
 }
 
