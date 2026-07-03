@@ -5,21 +5,21 @@ Jacob 设备自动化部署脚本，支持键盘交互式菜单选择功能，�
 ## 快速启动
 
 ```bash
-export GITEE_API_TOKEN="你的Token"
+export GITEE_API_TOKEN="你的 Token"
 export GITEE_BRANCH="main"
-export R2_SCRIPT_URL="https://pub-b4b7de76533e439c9056fa7c1ce37150.r2.dev/b64json.py"
 
-curl -s $R2_SCRIPT_URL | python3 - "$GITEE_API_TOKEN" "${GITEE_BRANCH:-main}" \
+curl -H "Authorization: token $GITEE_API_TOKEN" \
+  -fsSL "https://gitee.com/api/v5/repos/jacob_ng/linux-deploy/contents/install.sh?ref=${GITEE_BRANCH:-main}" \
+  | python3 -c "import sys,json,base64; d=json.load(sys.stdin); print(base64.b64decode(d['content']).decode('utf-8'))" \
   > /tmp/linux-deploy-install.sh && bash /tmp/linux-deploy-install.sh
 ```
 
 ## 环境变量
 
-| 变量                | 必填 | 默认值    | 说明                  |
-| ----------------- | -- | ------ | ------------------- |
-| `GITEE_API_TOKEN` | 是  | -      | Gitee API Token     |
-| `GITEE_BRANCH`    | 否  | `main` | 拉取的分支               |
-| `R2_SCRIPT_URL`   | 是  | -      | R2 上托管的 base64 解码脚本 |
+| 变量              | 必填 | 默认值    | 说明        |
+| --------------- | -- | ------ | ----------- |
+| `GITEE_API_TOKEN` | 是  | -      | Gitee API Token |
+| `GITEE_BRANCH`    | 否  | `main` | 拉取的分支       |
 
 ## 交互式菜单
 
