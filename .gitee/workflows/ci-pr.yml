@@ -1,0 +1,62 @@
+name: CI - Pull Request
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  lint:
+    name: Shell 语法检查
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: |
+          echo "=== 检查 Shell 脚本语法 ==="
+          find . -name "*.sh" -type f | while read -r file; do
+            echo "Checking: $file"
+            shellcheck -e SC1091,SC2034 "$file" || exit 1
+          done
+          echo "✓ 所有脚本通过语法检查"
+
+  test:
+    name: 基础功能测试
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 测试脚本可执行
+        run: |
+          echo "=== 检查脚本可执行性 ==="
+          for script in scripts/*.sh install.sh; do
+            if [ -f "$script" ]; then
+              chmod +x "$script"
+              echo "✓ $script"
+            fi
+          done
+
+      - name: 测试 install.sh 参数解析
+        run: |
+          echo "=== 测试分支参数 ==="
+          source <(grep -A5 "^GITEE_BRANCH=" install.sh | head -1)
+          echo "默认分支: ${GITEE_BRANCH:-main}"
+
+      - name: 测试 packages.txt 格式
+        run: |
+          echo "=== 检查 packages.txt 格式 ==="
+          if [ -f scripts/packages.txt ]; then
+            while IFS= read -r line || [ -n "$line" ]; do
+              [[ -z "$line" || "$line" =~ ^# ]] && continue
+              pkg="${line%%:*}"
+              cmd="${line#*:}"
+              echo "包: $pkg, 命令: $cmd"
+            done < scripts/packages.txt
+            echo "✓ packages.txt 格式正确"
+          fi

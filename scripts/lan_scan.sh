@@ -8,8 +8,8 @@ TIMEOUT=0.2
 SSH_OPTS="-o StrictHostKeyChecking=no"
 
 echo "--- LAN SSH Discovery ($(date +'%H:%M:%S')) ---"
-printf "%-15s | %-15s | %s\n" "IP Address" "Hostname" "Quick Connect Command"
-echo "---------------------------------------------------------------------------------------"
+printf "%-15s | %-28s | %s\n" "IP Address" "Hostname" "Quick Connect Command"
+echo "--------------------------------------------------------------------------------------------"
 
 scan_node() {
     local ip="$NETWORK_PREFIX.$1"
@@ -33,7 +33,7 @@ scan_node() {
         fi
         
         # Print formatted row
-        printf "%-15s | %-15s | ssh %s@%s\n" "$ip" "$name" "$USER" "$target"
+        printf "%-15s | %-28s | ssh %s@%s\n" "$ip" "$name" "$USER" "$target"
     fi
 }
 
@@ -43,4 +43,4 @@ for i in {1..254}; do
 done
 
 wait
-echo "---------------------------------------------------------------------------------------"
+echo "--------------------------------------------------------------------------------------------"
