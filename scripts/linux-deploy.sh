@@ -97,6 +97,15 @@ setup_bashrc_base() {
         if grep -q "# linux-deploy-start" ~/.bashrc 2>/dev/null; then
             sed -i '/# linux-deploy-start/,/# linux-deploy-end/d' ~/.bashrc
         fi
+
+        # 删除旧版独立的 R2 配置块（迁移到区块内）
+        sed -i '/# Cloudflare R2 配置/d' ~/.bashrc
+        sed -i '/# 如需修改，请编辑 ~\/.bashrc/d' ~/.bashrc
+        sed -i '/^export R2_ACCESS_KEY_ID=/d' ~/.bashrc
+        sed -i '/^export R2_SECRET_ACCESS_KEY=/d' ~/.bashrc
+        sed -i '/^export R2_BUCKET_NAME=/d' ~/.bashrc
+        sed -i '/^export R2_ENDPOINT_URL=/d' ~/.bashrc
+        sed -i '/^export R2_PUBLIC_URL=/d' ~/.bashrc
     fi
 }
 
