@@ -97,6 +97,15 @@ setup_bashrc_base() {
         if grep -q "# linux-deploy-start" ~/.bashrc 2>/dev/null; then
             sed -i '/# linux-deploy-start/,/# linux-deploy-end/d' ~/.bashrc
         fi
+
+        # 删除旧版独立的 R2 配置块（迁移到区块内）
+        sed -i '/# Cloudflare R2 配置/d' ~/.bashrc
+        sed -i '/# 如需修改，请编辑 ~\/.bashrc/d' ~/.bashrc
+        sed -i '/^export R2_ACCESS_KEY_ID=/d' ~/.bashrc
+        sed -i '/^export R2_SECRET_ACCESS_KEY=/d' ~/.bashrc
+        sed -i '/^export R2_BUCKET_NAME=/d' ~/.bashrc
+        sed -i '/^export R2_ENDPOINT_URL=/d' ~/.bashrc
+        sed -i '/^export R2_PUBLIC_URL=/d' ~/.bashrc
     fi
 }
 
@@ -143,7 +152,7 @@ write_linux_deploy_block() {
     fi
 
     # 如果没有任何内容，不写入区块
-    if [ -z "$scripts_section" ] && [ -z "$aliases_section" ]; then
+    if [ -z "$scripts_section" ] && [ -z "$aliases_section" ] && [ -z "$R2_CONFIG_SECTION" ]; then
         echo -e "${YELLOW}[!] 未选择任何快捷方式，跳过写入 ~/.bashrc${RESET}"
         return
     fi
@@ -159,6 +168,10 @@ write_linux_deploy_block() {
         block+="# --- 快捷别名 ---\n${aliases_section}"
     fi
 
+    if [ -n "$R2_CONFIG_SECTION" ]; then
+        block+="# --- 环境变量 ---\n${R2_CONFIG_SECTION}"
+    fi
+
     block+="# linux-deploy-end\n"
 
     # 写入 ~/.bashrc
@@ -166,7 +179,10 @@ write_linux_deploy_block() {
     echo -e "${GREEN}[✓] 已更新 ~/.bashrc 的 linux-deploy 区块${RESET}"
 }
 
-# 配置 Cloudflare R2（可选）
+# 配置 Cloudflare R2（可选）- 收集配置，返回配置字符串
+# 配置结果存储在全局变量 R2_CONFIG_SECTION 中
+R2_CONFIG_SECTION=""
+
 configure_r2() {
     echo
     echo -e "${BLUE}[*] 配置 Cloudflare R2（可选）${RESET}"
@@ -187,18 +203,15 @@ configure_r2() {
         r2_public_url="YOUR_R2_PUBLIC_URL"
     fi
 
-    {
-        echo ""
-        echo "# Cloudflare R2 配置"
-        echo "# 如需修改，请编辑 ~/.bashrc 或使用 source ~/.bashrc 后重新登录"
-        echo "export R2_ACCESS_KEY_ID=$r2_access_key_id"
-        echo "export R2_SECRET_ACCESS_KEY=$r2_secret_access_key"
-        echo "export R2_BUCKET_NAME=$r2_bucket_name"
-        echo "export R2_ENDPOINT_URL=$r2_endpoint_url"
-        echo "export R2_PUBLIC_URL=$r2_public_url"
-    } >> "$HOME/.bashrc"
+    # 存储到全局变量，供 write_linux_deploy_block 使用
+    R2_CONFIG_SECTION="# Cloudflare R2 配置\n"
+    R2_CONFIG_SECTION+="export R2_ACCESS_KEY_ID=$r2_access_key_id\n"
+    R2_CONFIG_SECTION+="export R2_SECRET_ACCESS_KEY=$r2_secret_access_key\n"
+    R2_CONFIG_SECTION+="export R2_BUCKET_NAME=$r2_bucket_name\n"
+    R2_CONFIG_SECTION+="export R2_ENDPOINT_URL=$r2_endpoint_url\n"
+    R2_CONFIG_SECTION+="export R2_PUBLIC_URL=$r2_public_url\n"
 
-    echo -e "${GREEN}[✓] R2 配置已写入 ~/.bashrc${RESET}"
+    echo -e "${GREEN}[✓] R2 配置已准备${RESET}"
 }
 
 # ==================== 交互式菜单 (支持方向键+空格) ====================
@@ -524,6 +537,21 @@ EOF
 
 run_deploy() {
     echo
+    # --- 清除旧配置警告 ---
+    echo -e "${YELLOW}=================================${RESET}"
+    echo -e "${YELLOW}  [!] 警告: 即将清除 ~/.bashrc 中的旧配置${RESET}"
+    echo -e "${YELLOW}      包括 linux-deploy 区块和独立 R2 配置${RESET}"
+    echo -e "${YELLOW}=================================${RESET}"
+    read -p "是否继续? (y/n，默认 y): " confirm_clear
+    if [[ "$confirm_clear" =~ ^[Nn]$ ]]; then
+        echo -e "${YELLOW}[!] 已取消部署${RESET}"
+        exit 0
+    fi
+
+    # --- 清除旧配置 ---
+    setup_bashrc_base
+    echo
+
     echo -e "${GREEN}=================================${RESET}"
     echo -e "${GREEN}        开始执行部署...           ${RESET}"
     echo -e "${GREEN}=================================${RESET}"
@@ -542,13 +570,13 @@ run_deploy() {
         done < "$pkg_file"
     fi
 
-    # --- 写入 ~/.bashrc 区块 ---
-    write_linux_deploy_block
-
-    # --- 配置 R2 环境变量 ---
+    # --- 配置 R2 环境变量（先收集配置） ---
     if [ "${CHECKED[$((PKG_COUNT + 7))]:-0}" = "1" ]; then
         configure_r2
     fi
+
+    # --- 写入 ~/.bashrc 区块（包含 R2 配置） ---
+    write_linux_deploy_block
 
     # --- 配置 sudoers 免密 ---
     setup_sudoers
@@ -569,7 +597,6 @@ show_menu() {
 
     setup_sources
     setup_git
-    setup_bashrc_base
 
     show_interactive_menu
     run_deploy
