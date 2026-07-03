@@ -38,7 +38,7 @@ echo
 # Gitee 仓库配置
 GITEE_OWNER="jacob_ng"
 GITEE_REPO="linux-deploy"
-GITEE_BRANCH="${GITEE_BRANCH:-main}"
+GITEE_BRANCH="${GITEE_BRANCH:-dev}"
 
 # 本地部署目录
 DEPLOY_DIR="$HOME/linux-deploy"
