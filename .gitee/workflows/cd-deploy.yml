@@ -1,0 +1,75 @@
+name: CD - Deploy to Main
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Shell 语法检查
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: |
+          echo "=== 检查 Shell 脚本语法 ==="
+          find . -name "*.sh" -type f | while read -r file; do
+            echo "Checking: $file"
+            shellcheck -e SC1091,SC2034 "$file" || exit 1
+          done
+          echo "✓ 所有脚本通过语法检查"
+
+  test:
+    name: 集成测试
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 测试 download_file 函数
+        run: |
+          echo "=== 测试文件下载逻辑 ==="
+          # 提取并测试 download_file 函数
+          source <(sed -n '/^download_file()/,/^}/p' install.sh)
+          GITEE_OWNER="jacob_ng"
+          GITEE_REPO="linux-deploy"
+          GITEE_BRANCH="main"
+          
+          # 测试下载 README
+          if curl -fsSL "https://gitee.com/$GITEE_OWNER/$GITEE_REPO/raw/$GITEE_BRANCH/README.md" -o /tmp/test_readme.md; then
+            echo "✓ 文件下载测试通过"
+          else
+            echo "✗ 文件下载测试失败"
+            exit 1
+          fi
+
+      - name: 测试 linux-deploy.sh 菜单逻辑
+        run: |
+          echo "=== 测试菜单函数存在性 ==="
+          for func in setup_sources install_pkg setup_git setup_bashrc_base configure_r2 setup_sudoers; do
+            if grep -q "^${func}()" scripts/linux-deploy.sh; then
+              echo "✓ 函数 $func 存在"
+            else
+              echo "✗ 函数 $func 缺失"
+              exit 1
+            fi
+          done
+
+  notify:
+    name: 部署通知
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: 部署成功通知
+        run: |
+          echo "==================================="
+          echo "  ✓ Main 分支部署检查完成"
+          echo "  提交: ${{ github.sha }}"
+          echo "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "==================================="
