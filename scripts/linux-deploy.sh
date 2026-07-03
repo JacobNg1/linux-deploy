@@ -537,6 +537,21 @@ EOF
 
 run_deploy() {
     echo
+    # --- 清除旧配置警告 ---
+    echo -e "${YELLOW}=================================${RESET}"
+    echo -e "${YELLOW}  [!] 警告: 即将清除 ~/.bashrc 中的旧配置${RESET}"
+    echo -e "${YELLOW}      包括 linux-deploy 区块和独立 R2 配置${RESET}"
+    echo -e "${YELLOW}=================================${RESET}"
+    read -p "是否继续? (y/n，默认 y): " confirm_clear
+    if [[ "$confirm_clear" =~ ^[Nn]$ ]]; then
+        echo -e "${YELLOW}[!] 已取消部署${RESET}"
+        exit 0
+    fi
+
+    # --- 清除旧配置 ---
+    setup_bashrc_base
+    echo
+
     echo -e "${GREEN}=================================${RESET}"
     echo -e "${GREEN}        开始执行部署...           ${RESET}"
     echo -e "${GREEN}=================================${RESET}"
@@ -582,7 +597,6 @@ show_menu() {
 
     setup_sources
     setup_git
-    setup_bashrc_base
 
     show_interactive_menu
     run_deploy
