@@ -261,7 +261,13 @@ get_cat_name() {
 # 读取单个按键 (支持方向键)
 read_key() {
     local key key2 key3
-    IFS= read -rs -n1 key
+
+    # 检查 stdin 是否可读
+    if ! IFS= read -rs -n1 -t 30 key; then
+        # read 失败（EOF 或超时），返回空值让调用方处理
+        echo ""
+        return
+    fi
 
     # 方向键 ESC 序列
     if [[ "$key" == $'\x1b' ]]; then
@@ -334,12 +340,101 @@ render_menu() {
     echo -e "${BLUE}---------------------------------${RESET}"
 }
 
+# 检测是否为交互式终端
+is_interactive_terminal() {
+    # 检查 stdin 是否连接到终端
+    [ -t 0 ] && [ -t 1 ] && return 0
+    return 1
+}
+
+# 简单菜单（非交互式终端备选方案）
+show_simple_menu() {
+    echo
+    echo -e "${CYAN}>>> 请选择要部署的选项（输入序号，多个用空格分隔，直接回车全选）:${RESET}"
+    echo
+
+    local last_cat=""
+    for i in "${!OPTIONS[@]}"; do
+        local opt="${OPTIONS[$i]}"
+        local cat_id="${opt#*|}"
+        cat_id="${cat_id%%|*}"
+        local name="${opt#*|*|}"
+
+        if [ "$cat_id" != "$last_cat" ]; then
+            echo -e "${CYAN}$(get_cat_name "$cat_id")${RESET}"
+            last_cat="$cat_id"
+        fi
+
+        echo -e "  ${YELLOW}$((i+1))${RESET}. $name"
+    done
+
+    echo
+    echo -e "${BLUE}输入选项 (例如: 1 3 5 或直接回车全选，输入 0 或 q 退出):${RESET}"
+    read -r selection
+
+    # 用户输入 0 或 q 退出
+    if [[ "$selection" == "0" ]] || [[ "$selection" =~ ^[qQ]$ ]]; then
+        echo -e "${YELLOW}[!] 已取消部署${RESET}"
+        exit 0
+    fi
+
+    # 直接回车 = 全选（保持默认）
+    if [ -z "$selection" ]; then
+        echo -e "${GREEN}[✓] 已选择全部选项${RESET}"
+        return
+    fi
+
+    # 先取消所有选择
+    for i in "${!CHECKED[@]}"; do
+        CHECKED[$i]=0
+    done
+
+    # 根据用户输入设置选择
+    for num in $selection; do
+        if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le "${#OPTIONS[@]}" ]; then
+            CHECKED[$((num-1))]=1
+        fi
+    done
+
+    # 显示用户选择的内容
+    echo
+    echo -e "${GREEN}[✓] 已选择:${RESET}"
+    for i in "${!OPTIONS[@]}"; do
+        if [ "${CHECKED[$i]:-0}" = "1" ]; then
+            local opt="${OPTIONS[$i]}"
+            local name="${opt#*|*|}"
+            echo -e "    - $name"
+        fi
+    done
+    echo
+}
+
 show_interactive_menu() {
+    # 检测终端环境
+    if ! is_interactive_terminal; then
+        echo -e "${YELLOW}[!] 检测到非交互式终端，使用简单菜单模式${RESET}"
+        show_simple_menu
+        return
+    fi
+
+    # 检测 tput 是否可用
+    if ! command -v tput &>/dev/null; then
+        echo -e "${YELLOW}[!] tput 不可用，使用简单菜单模式${RESET}"
+        show_simple_menu
+        return
+    fi
+
     # CHECKED 已在定义时默认全选
     CURSOR=0
 
-    tput smcup
-    tput civis
+    # 尝试进入备用屏幕，如果失败则使用简单菜单
+    if ! tput smcup 2>/dev/null; then
+        echo -e "${YELLOW}[!] 终端不支持备用屏幕，使用简单菜单模式${RESET}"
+        show_simple_menu
+        return
+    fi
+
+    tput civis 2>/dev/null || true
 
     clear
     render_menu
@@ -347,6 +442,15 @@ show_interactive_menu() {
     while true; do
         local key
         key=$(read_key)
+
+        # 如果 read_key 返回空值（可能是 stdin 问题），切换到简单模式
+        if [ -z "$key" ]; then
+            tput rmcup 2>/dev/null || true
+            tput cnorm 2>/dev/null || true
+            echo -e "${YELLOW}[!] 按键读取失败，切换到简单菜单模式${RESET}"
+            show_simple_menu
+            return
+        fi
 
         case "$key" in
             "UP")
@@ -373,8 +477,8 @@ show_interactive_menu() {
                 break
                 ;;
             "QUIT")
-                tput rmcup
-                tput cnorm
+                tput rmcup 2>/dev/null || true
+                tput cnorm 2>/dev/null || true
                 echo -e "${YELLOW}[!] 已取消部署${RESET}"
                 exit 0
                 ;;
@@ -383,8 +487,8 @@ show_interactive_menu() {
         esac
     done
 
-    tput rmcup
-    tput cnorm
+    tput rmcup 2>/dev/null || true
+    tput cnorm 2>/dev/null || true
 }
 
 # ==================== 配置 sudoers 免密 ====================

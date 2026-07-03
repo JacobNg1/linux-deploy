@@ -156,7 +156,21 @@ download_from_gitee_api "scripts/lan_scan.sh" "$SCRIPTS_DIR/lan_scan.sh"
 echo
 echo -e "${BLUE}[*] 开始执行部署...${RESET}"
 cd "$DEPLOY_DIR"
-bash "$DEPLOY_DIR/linux-deploy.sh"
+
+# 检查是否为交互式终端
+if [ -t 0 ]; then
+    # 正常交互式执行
+    bash "$DEPLOY_DIR/linux-deploy.sh"
+else
+    # stdin 被重定向（如管道），需要重新连接到终端
+    echo -e "${YELLOW}[!] 检测到非交互式输入，尝试连接终端...${RESET}"
+    if [ -e /dev/tty ]; then
+        bash "$DEPLOY_DIR/linux-deploy.sh" < /dev/tty
+    else
+        echo -e "${YELLOW}[!] 无法连接终端，使用非交互模式${RESET}"
+        bash "$DEPLOY_DIR/linux-deploy.sh"
+    fi
+fi
 
 echo
 echo -e "${GREEN}=================================${RESET}"
