@@ -26,13 +26,29 @@ fi
 
 # R2 模式：从环境变量读取配置并下载 hosts
 if [ "$USE_R2" -eq 1 ]; then
-    if [ -z "$R2_PUBLIC_URL" ] || [[ "$R2_PUBLIC_URL" == YOUR_* ]]; then
-        [ "$QUIET" -ne 1 ] && echo "错误: 未配置 R2_PUBLIC_URL，请先配置 ~/.bashrc 中的 R2 环境变量" >&2
-        exit 1
-    fi
     SRC="/tmp/hosts_r2"
-    if ! curl -fsSL -o "$SRC" "${R2_PUBLIC_URL}/hosts/main/hosts"; then
-        [ "$QUIET" -ne 1 ] && echo "错误: 从 R2 下载 hosts 失败" >&2
+    R2_FILE_PATH="hosts/main/hosts"
+
+    # 优先使用公开 URL（如果配置了）
+    if [ -n "$R2_PUBLIC_URL" ] && [[ "$R2_PUBLIC_URL" != YOUR_* ]]; then
+        if ! curl -fsSL -o "$SRC" "${R2_PUBLIC_URL}/${R2_FILE_PATH}"; then
+            [ "$QUIET" -ne 1 ] && echo "错误: 从 R2 公开 URL 下载 hosts 失败" >&2
+            exit 1
+        fi
+    # 否则使用 AWS CLI + API 凭证
+    elif [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ] && [ -n "$R2_BUCKET_NAME" ] && [ -n "$R2_ENDPOINT_URL" ]; then
+        if ! command -v aws &>/dev/null; then
+            [ "$QUIET" -ne 1 ] && echo "错误: 未安装 aws CLI，请先安装: sudo apt install awscli" >&2
+            exit 1
+        fi
+        if ! AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+             AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+             aws --endpoint-url="$R2_ENDPOINT_URL" s3 cp "s3://${R2_BUCKET_NAME}/${R2_FILE_PATH}" "$SRC" --quiet 2>/dev/null; then
+            [ "$QUIET" -ne 1 ] && echo "错误: 从 R2 API 下载 hosts 失败" >&2
+            exit 1
+        fi
+    else
+        [ "$QUIET" -ne 1 ] && echo "错误: 未配置 R2 凭证，请配置 ~/.bashrc 中的 R2 环境变量" >&2
         exit 1
     fi
 fi
