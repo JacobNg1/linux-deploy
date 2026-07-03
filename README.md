@@ -100,7 +100,7 @@ jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/lan_scan.sh
 # --- 脚本自启动 ---
 command -v fastfetch >/dev/null && fastfetch
 [ -x ~/scripts/check_nas.sh ] && sudo ~/scripts/check_nas.sh -q
-[ -x ~/scripts/sync_hosts.sh ] && sudo ~/scripts/sync_hosts.sh -q
+[ -x ~/scripts/sync_hosts.sh ] && sudo -E ~/scripts/sync_hosts.sh --source=r2 -q
 [ -x ~/scripts/lan_scan.sh ] && sudo ~/scripts/lan_scan.sh
 # --- 快捷别名 ---
 alias ll='ls -alF'
@@ -112,6 +112,13 @@ PROXY_NODE=http://tc:7890
 alias pxon='export http_proxy="$PROXY_NODE"; export https_proxy="$PROXY_NODE"; echo "Proxy On: $PROXY_NODE"'
 alias pxoff='unset http_proxy; unset https_proxy; echo "Proxy Off"'
 alias pxtest='curl -I https://www.google.com'
+# --- 环境变量 ---
+# Cloudflare R2 配置
+export R2_ACCESS_KEY_ID=YOUR_R2_ACCESS_KEY_ID
+export R2_SECRET_ACCESS_KEY=YOUR_R2_SECRET_ACCESS_KEY
+export R2_BUCKET_NAME=YOUR_R2_BUCKET_NAME
+export R2_ENDPOINT_URL=YOUR_R2_ENDPOINT_URL
+export R2_PUBLIC_URL=YOUR_R2_PUBLIC_URL
 # linux-deploy-end
 ```
 

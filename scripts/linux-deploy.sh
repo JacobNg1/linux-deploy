@@ -143,7 +143,7 @@ write_linux_deploy_block() {
     fi
 
     # 如果没有任何内容，不写入区块
-    if [ -z "$scripts_section" ] && [ -z "$aliases_section" ]; then
+    if [ -z "$scripts_section" ] && [ -z "$aliases_section" ] && [ -z "$R2_CONFIG_SECTION" ]; then
         echo -e "${YELLOW}[!] 未选择任何快捷方式，跳过写入 ~/.bashrc${RESET}"
         return
     fi
@@ -159,6 +159,10 @@ write_linux_deploy_block() {
         block+="# --- 快捷别名 ---\n${aliases_section}"
     fi
 
+    if [ -n "$R2_CONFIG_SECTION" ]; then
+        block+="# --- 环境变量 ---\n${R2_CONFIG_SECTION}"
+    fi
+
     block+="# linux-deploy-end\n"
 
     # 写入 ~/.bashrc
@@ -166,7 +170,10 @@ write_linux_deploy_block() {
     echo -e "${GREEN}[✓] 已更新 ~/.bashrc 的 linux-deploy 区块${RESET}"
 }
 
-# 配置 Cloudflare R2（可选）
+# 配置 Cloudflare R2（可选）- 收集配置，返回配置字符串
+# 配置结果存储在全局变量 R2_CONFIG_SECTION 中
+R2_CONFIG_SECTION=""
+
 configure_r2() {
     echo
     echo -e "${BLUE}[*] 配置 Cloudflare R2（可选）${RESET}"
@@ -187,18 +194,15 @@ configure_r2() {
         r2_public_url="YOUR_R2_PUBLIC_URL"
     fi
 
-    {
-        echo ""
-        echo "# Cloudflare R2 配置"
-        echo "# 如需修改，请编辑 ~/.bashrc 或使用 source ~/.bashrc 后重新登录"
-        echo "export R2_ACCESS_KEY_ID=$r2_access_key_id"
-        echo "export R2_SECRET_ACCESS_KEY=$r2_secret_access_key"
-        echo "export R2_BUCKET_NAME=$r2_bucket_name"
-        echo "export R2_ENDPOINT_URL=$r2_endpoint_url"
-        echo "export R2_PUBLIC_URL=$r2_public_url"
-    } >> "$HOME/.bashrc"
+    # 存储到全局变量，供 write_linux_deploy_block 使用
+    R2_CONFIG_SECTION="# Cloudflare R2 配置\n"
+    R2_CONFIG_SECTION+="export R2_ACCESS_KEY_ID=$r2_access_key_id\n"
+    R2_CONFIG_SECTION+="export R2_SECRET_ACCESS_KEY=$r2_secret_access_key\n"
+    R2_CONFIG_SECTION+="export R2_BUCKET_NAME=$r2_bucket_name\n"
+    R2_CONFIG_SECTION+="export R2_ENDPOINT_URL=$r2_endpoint_url\n"
+    R2_CONFIG_SECTION+="export R2_PUBLIC_URL=$r2_public_url\n"
 
-    echo -e "${GREEN}[✓] R2 配置已写入 ~/.bashrc${RESET}"
+    echo -e "${GREEN}[✓] R2 配置已准备${RESET}"
 }
 
 # ==================== 交互式菜单 (支持方向键+空格) ====================
@@ -542,13 +546,13 @@ run_deploy() {
         done < "$pkg_file"
     fi
 
-    # --- 写入 ~/.bashrc 区块 ---
-    write_linux_deploy_block
-
-    # --- 配置 R2 环境变量 ---
+    # --- 配置 R2 环境变量（先收集配置） ---
     if [ "${CHECKED[$((PKG_COUNT + 7))]:-0}" = "1" ]; then
         configure_r2
     fi
+
+    # --- 写入 ~/.bashrc 区块（包含 R2 配置） ---
+    write_linux_deploy_block
 
     # --- 配置 sudoers 免密 ---
     setup_sudoers
