@@ -73,77 +73,41 @@ check_dependency() {
 }
 
 check_dependency curl curl
-check_dependency python3 python3
 
 # 创建目录
 mkdir -p "$DEPLOY_DIR"
 mkdir -p "$SCRIPTS_DIR"
 
-# 使用 Gitee API 下载文件函数
-download_from_gitee_api() {
+# 使用 raw URL 直接下载文件（无需 Token）
+download_file() {
     local file_path="$1"
     local local_path="$2"
     local filename=$(basename "$local_path")
 
-    local api_url="https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/contents/$file_path?ref=$GITEE_BRANCH"
+    local raw_url="https://gitee.com/$GITEE_OWNER/$GITEE_REPO/raw/$GITEE_BRANCH/$file_path"
 
     echo -e "${BLUE}[*] 正在下载 $filename ...${RESET}"
-    echo -e "${BLUE}    URL: $api_url${RESET}"
 
-    # 使用 API + Token 获取文件内容（base64 编码）
-    local response
-    response=$(curl -sSL -H "Authorization: token $GITEE_API_TOKEN" "$api_url" 2>&1)
-    local curl_exit_code=$?
-
-    if [ $curl_exit_code -ne 0 ]; then
-        echo -e "${YELLOW}[!] curl 请求失败 (exit code: $curl_exit_code)${RESET}"
-        echo -e "${YELLOW}    响应: $response${RESET}"
-        return 1
-    fi
-
-    if [ -z "$response" ]; then
-        echo -e "${YELLOW}[!] $filename 下载失败: 空响应${RESET}"
-        return 1
-    fi
-
-    if echo "$response" | grep -q '"message"'; then
-        echo -e "${YELLOW}[!] $filename 下载失败 (API 错误)${RESET}"
-        echo -e "${YELLOW}    响应: $response${RESET}"
-        return 1
-    fi
-
-    # 解析 JSON 并解码 base64
-    echo "$response" | python3 -c "
-import sys, json, base64
-try:
-    data = json.load(sys.stdin)
-    content = base64.b64decode(data['content']).decode('utf-8')
-    print(content, end='')
-except Exception as e:
-    sys.stderr.write(f'Error: {e}\n')
-    sys.exit(1)
-" > "$local_path"
-
-    if [ $? -eq 0 ] && [ -s "$local_path" ]; then
+    if curl -fsSL "$raw_url" -o "$local_path"; then
         echo -e "${GREEN}[✓] $filename 下载成功${RESET}"
         chmod +x "$local_path"
     else
-        echo -e "${YELLOW}[!] $filename 解码失败${RESET}"
+        echo -e "${YELLOW}[!] $filename 下载失败${RESET}"
         rm -f "$local_path"
         return 1
     fi
 }
 
 # 下载主脚本
-download_from_gitee_api "scripts/linux-deploy.sh" "$DEPLOY_DIR/linux-deploy.sh"
+download_file "scripts/linux-deploy.sh" "$DEPLOY_DIR/linux-deploy.sh"
 
 # 下载 packages.txt（软件列表）
-download_from_gitee_api "scripts/packages.txt" "$DEPLOY_DIR/packages.txt" || true
+download_file "scripts/packages.txt" "$DEPLOY_DIR/packages.txt" || true
 
 # 下载子脚本
-download_from_gitee_api "scripts/check_nas.sh" "$SCRIPTS_DIR/check_nas.sh"
-download_from_gitee_api "scripts/sync_hosts.sh" "$SCRIPTS_DIR/sync_hosts.sh"
-download_from_gitee_api "scripts/lan_scan.sh" "$SCRIPTS_DIR/lan_scan.sh"
+download_file "scripts/check_nas.sh" "$SCRIPTS_DIR/check_nas.sh"
+download_file "scripts/sync_hosts.sh" "$SCRIPTS_DIR/sync_hosts.sh"
+download_file "scripts/lan_scan.sh" "$SCRIPTS_DIR/lan_scan.sh"
 
 # 执行主部署脚本
 echo
