@@ -56,13 +56,6 @@ if [ "$PWD" != "$HOME" ]; then
     echo
 fi
 
-# 检查 GITEE_API_TOKEN 是否设置
-if [ -z "$GITEE_API_TOKEN" ]; then
-    echo -e "${YELLOW}[!] 错误: 未设置 GITEE_API_TOKEN 环境变量${RESET}"
-    echo -e "${BLUE}[*] 请先执行以下命令设置 Token，然后再运行本脚本:${RESET}"
-    echo -e "${BLUE}    export GITEE_API_TOKEN=aee0c6d82280dd56de52b4eab884cdfd${RESET}"
-    exit 1
-fi
 
 echo -e "${BLUE}[*] Jacob Linux 一键在线部署脚本${RESET}"
 echo -e "${BLUE}[*] 仓库: $GITEE_OWNER/$GITEE_REPO${RESET}"

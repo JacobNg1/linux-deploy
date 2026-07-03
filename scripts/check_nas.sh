@@ -6,7 +6,7 @@ if [[ "$1" == "-q" ]]; then
     QUIET=true
 fi
 
-MOUNT_POINTS=("/mnt/nas" "/mnt/nas-2")
+MOUNT_POINTS=("/mnt/data1" "/mnt/data2")
 
 # 自动提权：如果当前不是 root，用 sudo 重新执行本脚本
 if [ "$EUID" -ne 0 ]; then

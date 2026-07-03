@@ -5,21 +5,9 @@ Jacob 设备自动化部署脚本，支持键盘交互式菜单选择功能，�
 ## 快速启动
 
 ```bash
-export GITEE_API_TOKEN="你的 Token"
-export GITEE_BRANCH="main"
-
-curl -H "Authorization: token $GITEE_API_TOKEN" \
-  -fsSL "https://gitee.com/api/v5/repos/jacob_ng/linux-deploy/contents/install.sh?ref=${GITEE_BRANCH:-main}" \
-  | python3 -c "import sys,json,base64; d=json.load(sys.stdin); print(base64.b64decode(d['content']).decode('utf-8'))" \
-  > /tmp/linux-deploy-install.sh && bash /tmp/linux-deploy-install.sh
+curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash
 ```
 
-## 环境变量
-
-| 变量              | 必填 | 默认值    | 说明        |
-| --------------- | -- | ------ | ----------- |
-| `GITEE_API_TOKEN` | 是  | -      | Gitee API Token |
-| `GITEE_BRANCH`    | 否  | `main` | 拉取的分支       |
 
 ## 交互式菜单
 
