@@ -2,3 +2,4 @@ nano
 fastfetch
 git
 curl
+awscli
