@@ -15,15 +15,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 setup_sources() {
     if [ -f /etc/debian_version ]; then
-        if ! grep -q "mirrors.aliyun.com" /etc/apt/sources.list 2>/dev/null; then
-            echo -e "${BLUE}[*] 检测到 Debian 系统，正在备份并切换为阿里云镜像源...${RESET}"
-            sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak_$(date +%Y%m%d)
-            sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
-            sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
-            sudo apt update -y
-        else
-            echo -e "${YELLOW}[!] APT 源已经是阿里云，跳过换源${RESET}"
+        local sources_files=()
+        [ -f /etc/apt/sources.list ] && sources_files+=("/etc/apt/sources.list")
+        for f in /etc/apt/sources.list.d/*.list; do
+            [ -f "$f" ] && sources_files+=("$f")
+        done
+
+        if [ ${#sources_files[@]} -eq 0 ]; then
+            echo -e "${YELLOW}[!] 未找到 APT 源配置文件，跳过换源${RESET}"
+            return
         fi
+
+        if grep -q "mirrors.aliyun.com" "${sources_files[@]}" 2>/dev/null; then
+            echo -e "${YELLOW}[!] APT 源已经是阿里云，跳过换源${RESET}"
+            return
+        fi
+
+        echo -e "${BLUE}[*] 检测到 Debian 系统，正在备份并切换为阿里云镜像源...${RESET}"
+        local date_suffix
+        date_suffix=$(date +%Y%m%d)
+        for f in "${sources_files[@]}"; do
+            sudo cp "$f" "${f}.bak_${date_suffix}"
+            sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' "$f"
+            sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' "$f"
+        done
+        sudo apt update -y
     elif [ -f /etc/redhat-release ]; then
         if ! grep -q "mirrors.aliyun.com" /etc/yum.repos.d/*.repo 2>/dev/null; then
             echo -e "${BLUE}[*] 检测到 RedHat 系列系统，正在配置阿里云 YUM 源...${RESET}"
