@@ -106,7 +106,7 @@ jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/lan_scan.sh
 # linux-deploy-start
 # --- 脚本自启动 ---
 command -v fastfetch >/dev/null && fastfetch
-[ -x ~/scripts/storage_scan.sh ] && sudo ~/scripts/storage_scan.sh -q
+[ -x ~/scripts/storage_scan.sh ] && sudo ~/scripts/storage_scan.sh
 [ -x ~/scripts/sync_hosts.sh ] && sudo -E ~/scripts/sync_hosts.sh --source=r2 -q
 [ -x ~/scripts/lan_scan.sh ] && sudo ~/scripts/lan_scan.sh
 # --- 快捷别名 ---
