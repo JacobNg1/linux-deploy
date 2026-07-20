@@ -3,6 +3,12 @@
 # 参数默认值
 USE_R2=0
 QUIET=0
+AWS_CMD=""
+
+# 在可能提权前记录当前用户能找到的 aws 路径，以便 root 进程使用
+if command -v aws &>/dev/null; then
+    AWS_CMD=$(command -v aws)
+fi
 
 # 路径变量
 SRC="/mnt/nas/OneDrive-Sync/PC/host/main/hosts"
