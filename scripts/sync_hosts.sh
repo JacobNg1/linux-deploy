@@ -41,13 +41,21 @@ if [ "$USE_R2" -eq 1 ]; then
         fi
     # 否则使用 AWS CLI + API 凭证
     elif [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ] && [ -n "$R2_BUCKET_NAME" ] && [ -n "$R2_ENDPOINT_URL" ]; then
-        if ! command -v aws &>/dev/null; then
+        # 获取 aws 命令路径（优先使用当前用户 PATH 中的 aws）
+        AWS_CMD=""
+        if command -v aws &>/dev/null; then
+            AWS_CMD=$(command -v aws)
+        elif command -v /home/jacob/miniconda/bin/aws &>/dev/null; then
+            AWS_CMD=/home/jacob/miniconda/bin/aws
+        fi
+
+        if [ -z "$AWS_CMD" ]; then
             [ "$QUIET" -ne 1 ] && echo "错误: 未安装 aws CLI，请先安装: sudo pip install awscli" >&2
             exit 1
         fi
         if ! AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
              AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
-             aws --endpoint-url="$R2_ENDPOINT_URL" s3 cp "s3://${R2_BUCKET_NAME}/${R2_FILE_PATH}" "$SRC" --quiet 2>/dev/null; then
+             "$AWS_CMD" --endpoint-url="$R2_ENDPOINT_URL" s3 cp "s3://${R2_BUCKET_NAME}/${R2_FILE_PATH}" "$SRC" --quiet 2>/dev/null; then
             [ "$QUIET" -ne 1 ] && echo "错误: 从 R2 API 下载 hosts 失败" >&2
             exit 1
         fi

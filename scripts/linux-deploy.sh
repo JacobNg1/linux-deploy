@@ -110,7 +110,10 @@ install_pkg() {
                 local python_cmd
                 for python_cmd in python3 python; do
                     if command -v "$python_cmd" &> /dev/null; then
-                        if $python_cmd -m pip install awscli; then
+                        # 优先尝试 sudo 安装到系统路径，以便 root 也能使用
+                        if sudo "$python_cmd" -m pip install awscli; then
+                            return 0
+                        elif $python_cmd -m pip install awscli; then
                             return 0
                         fi
                     fi
