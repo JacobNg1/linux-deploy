@@ -38,7 +38,7 @@ if [ "$USE_R2" -eq 1 ]; then
     # 否则使用 AWS CLI + API 凭证
     elif [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ] && [ -n "$R2_BUCKET_NAME" ] && [ -n "$R2_ENDPOINT_URL" ]; then
         if ! command -v aws &>/dev/null; then
-            [ "$QUIET" -ne 1 ] && echo "错误: 未安装 aws CLI，请先安装: sudo apt install awscli" >&2
+            [ "$QUIET" -ne 1 ] && echo "错误: 未安装 aws CLI，请先安装: sudo pip install awscli" >&2
             exit 1
         fi
         if ! AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \

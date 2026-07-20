@@ -31,14 +31,30 @@ setup_sources() {
             return
         fi
 
-        echo -e "${BLUE}[*] 检测到 Debian 系统，正在备份并切换为阿里云镜像源...${RESET}"
-        local date_suffix
-        date_suffix=$(date +%Y%m%d)
+        local distro_name="Debian"
+        if [ -f /etc/os-release ]; then
+            local name=$(grep "^NAME=" /etc/os-release | sed 's/NAME="\(.*\)"/\1/')
+            if [[ "$name" == *Ubuntu* ]]; then
+                distro_name="Ubuntu"
+            fi
+        fi
+
+        echo -e "${BLUE}[*] 检测到 ${distro_name} 系统，正在备份并切换为阿里云镜像源...${RESET}"
         for f in "${sources_files[@]}"; do
-            sudo cp "$f" "${f}.bak_${date_suffix}"
-            sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' "$f"
-            sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' "$f"
+            [ ! -f "${f}.bak" ] && sudo cp "$f" "${f}.bak"
+            if [ "$distro_name" = "Ubuntu" ]; then
+                sudo sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' "$f"
+                sudo sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' "$f"
+            else
+                sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' "$f"
+                sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' "$f"
+            fi
         done
+
+        if [ "$distro_name" = "Ubuntu" ]; then
+            sudo sed -i '/^deb/s/ main$/ main universe multiverse/' /etc/apt/sources.list
+        fi
+
         sudo apt update -y
     elif [ -f /etc/redhat-release ]; then
         if ! grep -q "mirrors.aliyun.com" /etc/yum.repos.d/*.repo 2>/dev/null; then
@@ -56,8 +72,8 @@ setup_sources() {
 
 install_pkg() {
     local input="$1"
-    local pkg="${input%%:*}"    # 包名（冒号前）
-    local cmd="${input#*:}"     # 命令名（冒号后，如果没有冒号则等于包名）
+    local pkg="${input%%:*}"
+    local cmd="${input#*:}"
     [ "$cmd" = "$input" ] && cmd="$pkg"
     
     if command -v "$cmd" &> /dev/null; then
@@ -66,10 +82,20 @@ install_pkg() {
     fi
     echo -e "${BLUE}[*] 正在安装 $pkg...${RESET}"
     if [ -f /etc/debian_version ]; then
-        sudo apt install -y "$pkg" && return 0
+        if sudo apt install -y "$pkg"; then
+            return 0
+        else
+            if [ "$pkg" = "awscli" ]; then
+                echo -e "${YELLOW}[!] apt 安装 awscli 失败，尝试 pip 安装...${RESET}"
+                sudo pip install awscli && return 0
+            fi
+            echo -e "${YELLOW}[!] 安装 $pkg 失败，已跳过${RESET}"
+            return 1
+        fi
     elif [ -f /etc/redhat-release ]; then
         sudo yum install -y "$pkg" && return 0
     fi
+    echo -e "${YELLOW}[!] 安装 $pkg 失败，已跳过${RESET}"
     return 1
 }
 
@@ -563,10 +589,11 @@ setup_sudoers() {
     local sudoers_file="/etc/sudoers.d/linux_deploy"
     local need_update=0
 
-    # 检查是否需要更新（文件不存在、缺少存储脚本或 SETENV）
+    # 检查是否需要更新（文件不存在、缺少脚本路径或 SETENV 未正确配置）
     if [ -f "$sudoers_file" ]; then
         if ! sudo grep -q "$HOME/scripts/storage_scan.sh" "$sudoers_file" 2>/dev/null || \
-           ! sudo grep -q "SETENV:" "$sudoers_file" 2>/dev/null; then
+           ! sudo grep -q "$HOME/scripts/lan_scan.sh" "$sudoers_file" 2>/dev/null || \
+           ! sudo grep -q "SETENV:.*sync_hosts.sh" "$sudoers_file" 2>/dev/null; then
             echo -e "${YELLOW}[!] sudoers 配置需要更新${RESET}"
             need_update=1
         else
