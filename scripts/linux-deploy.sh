@@ -106,18 +106,10 @@ install_pkg() {
             return 0
         else
             if [ "$pkg" = "awscli" ]; then
-                echo -e "${YELLOW}[!] apt 安装 awscli 失败，尝试 pip 安装...${RESET}"
-                local python_cmd
-                for python_cmd in python3 python; do
-                    if command -v "$python_cmd" &> /dev/null; then
-                        # 优先尝试 sudo 安装到系统路径，以便 root 也能使用
-                        if sudo "$python_cmd" -m pip install awscli; then
-                            return 0
-                        elif $python_cmd -m pip install awscli; then
-                            return 0
-                        fi
-                    fi
-                done
+                echo -e "${YELLOW}[!] apt 安装 awscli 失败，尝试使用系统 python3-pip 安装...${RESET}"
+                if sudo apt install -y python3-pip && sudo python3 -m pip install awscli; then
+                    return 0
+                fi
                 echo -e "${YELLOW}[!] pip 安装 awscli 失败，已跳过${RESET}"
             fi
             echo -e "${YELLOW}[!] 安装 $pkg 失败，已跳过${RESET}"

@@ -41,16 +41,12 @@ if [ "$USE_R2" -eq 1 ]; then
         fi
     # 否则使用 AWS CLI + API 凭证
     elif [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ] && [ -n "$R2_BUCKET_NAME" ] && [ -n "$R2_ENDPOINT_URL" ]; then
-        # 获取 aws 命令路径（优先使用当前用户 PATH 中的 aws）
-        AWS_CMD=""
-        if command -v aws &>/dev/null; then
+        # 在提权前定位 aws 命令路径，通过环境变量传递给 root 进程（避免 root PATH 不同）
+        if [ -z "${AWS_CMD:-}" ] && command -v aws &>/dev/null; then
             AWS_CMD=$(command -v aws)
-        elif command -v /home/jacob/miniconda/bin/aws &>/dev/null; then
-            AWS_CMD=/home/jacob/miniconda/bin/aws
         fi
-
-        if [ -z "$AWS_CMD" ]; then
-            [ "$QUIET" -ne 1 ] && echo "错误: 未安装 aws CLI，请先安装: sudo pip install awscli" >&2
+        if [ -z "${AWS_CMD:-}" ]; then
+            [ "$QUIET" -ne 1 ] && echo "错误: 未安装 aws CLI，请先安装: sudo apt install python3-pip && sudo python3 -m pip install awscli" >&2
             exit 1
         fi
         if ! AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
