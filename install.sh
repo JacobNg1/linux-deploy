@@ -7,6 +7,7 @@ set -e
 # 用法:
 #   curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash
 #   curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/dev/install.sh" | bash -s dev
+#   curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash -s -- --scripts
 #
 #   分支优先级: 命令行参数 > 环境变量 GITEE_BRANCH > 默认 main
 # ============================================
@@ -30,8 +31,29 @@ echo
 # Gitee 仓库配置
 GITEE_OWNER="jacob_ng"
 GITEE_REPO="linux-deploy"
-# 分支优先级: 命令行参数 > 环境变量 > 默认 main
-GITEE_BRANCH="${1:-${GITEE_BRANCH:-main}}"
+
+# 解析参数：位置参数为分支名，--scripts 仅更新脚本
+SCRIPTS_ONLY=0
+GITEE_BRANCH="${GITEE_BRANCH:-main}"
+for arg in "$@"; do
+    case "$arg" in
+        --scripts)
+            SCRIPTS_ONLY=1
+            ;;
+        --help|-h)
+            echo "用法: bash install.sh [分支名] [--scripts]"
+            echo "  --scripts  仅下载并更新脚本，不执行部署"
+            exit 0
+            ;;
+        --*)
+            echo -e "${YELLOW}[!] 未知参数: $arg${RESET}"
+            exit 1
+            ;;
+        *)
+            GITEE_BRANCH="$arg"
+            ;;
+    esac
+done
 
 # 本地部署目录
 DEPLOY_DIR="$HOME/linux-deploy"
@@ -108,6 +130,14 @@ download_file "scripts/packages.txt" "$DEPLOY_DIR/packages.txt" || true
 download_file "scripts/check_nas.sh" "$SCRIPTS_DIR/check_nas.sh"
 download_file "scripts/sync_hosts.sh" "$SCRIPTS_DIR/sync_hosts.sh"
 download_file "scripts/lan_scan.sh" "$SCRIPTS_DIR/lan_scan.sh"
+
+if [ "$SCRIPTS_ONLY" -eq 1 ]; then
+    echo
+    echo -e "${GREEN}=================================${RESET}"
+    echo -e "${GREEN}  脚本更新完成，未执行部署。${RESET}"
+    echo -e "${GREEN}=================================${RESET}"
+    exit 0
+fi
 
 # 执行主部署脚本
 echo

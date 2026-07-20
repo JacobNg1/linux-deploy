@@ -8,6 +8,13 @@ Jacob 设备自动化部署脚本，支持键盘交互式菜单选择功能，�
 curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash
 ```
 
+可选参数：
+
+```bash
+# 仅下载并更新脚本，不执行部署
+curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash -s -- --scripts
+```
+
 
 ## 交互式菜单
 
