@@ -15,6 +15,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 setup_sources() {
     if [ -f /etc/debian_version ]; then
+        local distro_name="Debian"
+        if [ -f /etc/os-release ]; then
+            local name=$(grep "^NAME=" /etc/os-release | sed 's/NAME="\(.*\)"/\1/')
+            if [[ "$name" == *Ubuntu* ]]; then
+                distro_name="Ubuntu"
+            fi
+        fi
+
         local sources_files=()
         [ -f /etc/apt/sources.list ] && sources_files+=("/etc/apt/sources.list")
         for f in /etc/apt/sources.list.d/*.list; do
@@ -26,36 +34,48 @@ setup_sources() {
             return
         fi
 
-        if grep -q "mirrors.aliyun.com" "${sources_files[@]}" 2>/dev/null; then
-            echo -e "${YELLOW}[!] APT 源已经是阿里云，跳过换源${RESET}"
-            return
-        fi
-
-        local distro_name="Debian"
-        if [ -f /etc/os-release ]; then
-            local name=$(grep "^NAME=" /etc/os-release | sed 's/NAME="\(.*\)"/\1/')
-            if [[ "$name" == *Ubuntu* ]]; then
-                distro_name="Ubuntu"
-            fi
-        fi
-
-        echo -e "${BLUE}[*] 检测到 ${distro_name} 系统，正在备份并切换为阿里云镜像源...${RESET}"
-        for f in "${sources_files[@]}"; do
-            [ ! -f "${f}.bak" ] && sudo cp "$f" "${f}.bak"
-            if [ "$distro_name" = "Ubuntu" ]; then
-                sudo sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' "$f"
-                sudo sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' "$f"
-            else
-                sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' "$f"
-                sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' "$f"
-            fi
-        done
+        local need_update=0
 
         if [ "$distro_name" = "Ubuntu" ]; then
-            sudo sed -i '/^deb/s/ main$/ main universe multiverse/' /etc/apt/sources.list
+            if ! grep -q "universe" /etc/apt/sources.list 2>/dev/null; then
+                echo -e "${BLUE}[*] 为 ${distro_name} 启用 universe/multiverse 仓库...${RESET}"
+                [ ! -f /etc/apt/sources.list.bak ] && sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak
+                sudo sed -i '/^deb/s/ main$/ main universe multiverse/' /etc/apt/sources.list
+                need_update=1
+            fi
         fi
 
-        sudo apt update -y
+        if ! grep -q "mirrors.aliyun.com" /etc/apt/sources.list 2>/dev/null; then
+            need_update=1
+            echo -e "${BLUE}[*] 检测到 ${distro_name} 系统，正在备份并切换为阿里云镜像源...${RESET}"
+            [ ! -f /etc/apt/sources.list.bak ] && sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak
+            if [ "$distro_name" = "Ubuntu" ]; then
+                sudo sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+                sudo sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+            else
+                sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+                sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+            fi
+        elif ! grep -q "mirrors.aliyun.com" "${sources_files[@]}" 2>/dev/null; then
+            need_update=1
+            echo -e "${BLUE}[*] 检测到 ${distro_name} 系统，部分源非阿里云，正在切换...${RESET}"
+            for f in "${sources_files[@]}"; do
+                [ ! -f "${f}.bak" ] && sudo cp "$f" "${f}.bak"
+                if [ "$distro_name" = "Ubuntu" ]; then
+                    sudo sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' "$f"
+                    sudo sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' "$f"
+                else
+                    sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' "$f"
+                    sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' "$f"
+                fi
+            done
+        else
+            echo -e "${YELLOW}[!] APT 源已经是阿里云，跳过换源${RESET}"
+        fi
+
+        if [ "$need_update" -eq 1 ]; then
+            sudo apt update -y
+        fi
     elif [ -f /etc/redhat-release ]; then
         if ! grep -q "mirrors.aliyun.com" /etc/yum.repos.d/*.repo 2>/dev/null; then
             echo -e "${BLUE}[*] 检测到 RedHat 系列系统，正在配置阿里云 YUM 源...${RESET}"
@@ -87,7 +107,15 @@ install_pkg() {
         else
             if [ "$pkg" = "awscli" ]; then
                 echo -e "${YELLOW}[!] apt 安装 awscli 失败，尝试 pip 安装...${RESET}"
-                sudo pip install awscli && return 0
+                local python_cmd
+                for python_cmd in python3 python; do
+                    if command -v "$python_cmd" &> /dev/null; then
+                        if $python_cmd -m pip install awscli; then
+                            return 0
+                        fi
+                    fi
+                done
+                echo -e "${YELLOW}[!] pip 安装 awscli 失败，已跳过${RESET}"
             fi
             echo -e "${YELLOW}[!] 安装 $pkg 失败，已跳过${RESET}"
             return 1
