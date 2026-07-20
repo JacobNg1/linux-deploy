@@ -19,9 +19,13 @@ DEST="/etc/hosts"
 TMP="/tmp/hosts_clean"
 HOSTNAME=$(hostname)
 
+# 获取脚本绝对路径
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
+
 # 自动提权：如果当前不是 root，用 sudo -E 重新执行本脚本，保留 R2 等环境变量
 if [ "$EUID" -ne 0 ]; then
-    exec sudo -E "$0" "$@"
+    exec sudo -E "$SCRIPT_PATH" "$@"
 fi
 
 # R2 模式：从环境变量读取配置并下载 hosts
