@@ -617,6 +617,22 @@ setup_sudoers() {
     local sudoers_file="/etc/sudoers.d/linux_deploy"
     local need_update=0
 
+    # 检查主 sudoers 文件中是否有旧配置，需要清理
+    if sudo grep -q "sync_hosts.sh\|storage_scan.sh\|lan_scan.sh" /etc/sudoers 2>/dev/null; then
+        echo -e "${BLUE}[*] 检测到 /etc/sudoers 中存在旧配置，正在清理...${RESET}"
+        local tmp_file=$(mktemp)
+        sudo grep -v "sync_hosts.sh\|storage_scan.sh\|lan_scan.sh" /etc/sudoers > "$tmp_file"
+        if sudo visudo -c -f "$tmp_file" 2>/dev/null; then
+            sudo cp "$tmp_file" /etc/sudoers
+            sudo chmod 440 /etc/sudoers
+            echo -e "${GREEN}[✓] 已清理 /etc/sudoers 中的旧配置${RESET}"
+        else
+            echo -e "${YELLOW}[!] 清理旧配置失败，请手动编辑 /etc/sudoers${RESET}"
+        fi
+        rm -f "$tmp_file"
+        need_update=1
+    fi
+
     # 检查是否需要更新（文件不存在、缺少脚本路径或 SETENV 未正确配置）
     if [ -f "$sudoers_file" ]; then
         if ! sudo grep -q "$HOME/scripts/storage_scan.sh" "$sudoers_file" 2>/dev/null || \
