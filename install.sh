@@ -127,7 +127,7 @@ download_file "scripts/linux-deploy.sh" "$DEPLOY_DIR/linux-deploy.sh"
 download_file "scripts/packages.txt" "$DEPLOY_DIR/packages.txt" || true
 
 # 下载子脚本
-download_file "scripts/check_nas.sh" "$SCRIPTS_DIR/check_nas.sh"
+download_file "scripts/storage_scan.sh" "$SCRIPTS_DIR/storage_scan.sh"
 download_file "scripts/sync_hosts.sh" "$SCRIPTS_DIR/sync_hosts.sh"
 download_file "scripts/lan_scan.sh" "$SCRIPTS_DIR/lan_scan.sh"
 

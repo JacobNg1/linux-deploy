@@ -91,7 +91,7 @@ curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash 
 部署时自动创建 `/etc/sudoers.d/linux_deploy`，对以下脚本免密：
 
 ```
-jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/check_nas.sh
+jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/storage_scan.sh
 jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/sync_hosts.sh
 jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/lan_scan.sh
 ```
@@ -106,7 +106,7 @@ jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/lan_scan.sh
 # linux-deploy-start
 # --- 脚本自启动 ---
 command -v fastfetch >/dev/null && fastfetch
-[ -x ~/scripts/check_nas.sh ] && sudo ~/scripts/check_nas.sh -q
+[ -x ~/scripts/storage_scan.sh ] && sudo ~/scripts/storage_scan.sh -q
 [ -x ~/scripts/sync_hosts.sh ] && sudo -E ~/scripts/sync_hosts.sh --source=r2 -q
 [ -x ~/scripts/lan_scan.sh ] && sudo ~/scripts/lan_scan.sh
 # --- 快捷别名 ---
@@ -136,7 +136,7 @@ linux-deploy/
 ├── install.sh              # 在线启动入口
 ├── scripts/
 │   ├── linux-deploy.sh     # 主部署脚本（交互式菜单）
-│   ├── check_nas.sh        # NAS 挂载脚本（自动提权）
+│   ├── storage_scan.sh     # 存储扫描与挂载脚本（自动提权）
 │   ├── sync_hosts.sh       # Hosts 同步脚本（自动提权）
 │   ├── lan_scan.sh         # 局域网 SSH 设备扫描
 │   └── packages.txt        # 软件安装列表（动态读取）

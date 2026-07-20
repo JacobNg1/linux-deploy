@@ -109,6 +109,7 @@ setup_bashrc_base() {
 
         # 删除旧命令行
         sed -i '/\[ -x ~\/scripts\/check_nas.sh \] && ~/d' ~/.bashrc
+        sed -i '/\[ -x ~\/scripts\/storage_scan.sh \] && ~/d' ~/.bashrc
         sed -i '/\[ -x ~\/scripts\/sync_hosts.sh \] && ~/d' ~/.bashrc
         sed -i '/\[ -x ~\/scripts\/lan_scan.sh \] && ~/d' ~/.bashrc
         sed -i '/alias lan=.*/d' ~/.bashrc
@@ -140,7 +141,7 @@ write_linux_deploy_block() {
         echo -e "${GREEN}[✓] 已添加: 登录显示系统信息${RESET}"
     fi
     if [ "${CHECKED[$((PKG_COUNT + 1))]:-0}" = "1" ]; then
-        scripts_section+="[ -x ~/scripts/check_nas.sh ] && sudo ~/scripts/check_nas.sh -q\n"
+        scripts_section+="[ -x ~/scripts/storage_scan.sh ] && sudo ~/scripts/storage_scan.sh -q\n"
         echo -e "${GREEN}[✓] 已添加: 登录自动挂载 NAS${RESET}"
     fi
     if [ "${CHECKED[$((PKG_COUNT + 2))]:-0}" = "1" ]; then
@@ -530,10 +531,11 @@ setup_sudoers() {
     local sudoers_file="/etc/sudoers.d/linux_deploy"
     local need_update=0
 
-    # 检查是否需要更新（文件不存在或缺少 SETENV）
+    # 检查是否需要更新（文件不存在、缺少存储脚本或 SETENV）
     if [ -f "$sudoers_file" ]; then
-        if ! sudo grep -q "SETENV:" "$sudoers_file" 2>/dev/null; then
-            echo -e "${YELLOW}[!] sudoers 配置需要更新（添加 SETENV 权限）${RESET}"
+        if ! sudo grep -q "$HOME/scripts/storage_scan.sh" "$sudoers_file" 2>/dev/null || \
+           ! sudo grep -q "SETENV:" "$sudoers_file" 2>/dev/null; then
+            echo -e "${YELLOW}[!] sudoers 配置需要更新${RESET}"
             need_update=1
         else
             echo -e "${YELLOW}[!] sudoers 免密已配置，跳过${RESET}"
@@ -547,7 +549,7 @@ setup_sudoers() {
         echo -e "${BLUE}[*] 正在配置 passwordless sudo（需输入一次密码）...${RESET}"
 
         sudo tee "$sudoers_file" > /dev/null <<EOF
-$USER ALL=(ALL) NOPASSWD: $HOME/scripts/check_nas.sh
+$USER ALL=(ALL) NOPASSWD: $HOME/scripts/storage_scan.sh
 $USER ALL=(ALL) NOPASSWD: SETENV: $HOME/scripts/sync_hosts.sh
 $USER ALL=(ALL) NOPASSWD: $HOME/scripts/lan_scan.sh
 EOF
