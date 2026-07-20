@@ -15,15 +15,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 setup_sources() {
     if [ -f /etc/debian_version ]; then
-        if ! grep -q "mirrors.aliyun.com" /etc/apt/sources.list 2>/dev/null; then
-            echo -e "${BLUE}[*] 检测到 Debian 系统，正在备份并切换为阿里云镜像源...${RESET}"
-            sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak_$(date +%Y%m%d)
-            sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
-            sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
-            sudo apt update -y
-        else
-            echo -e "${YELLOW}[!] APT 源已经是阿里云，跳过换源${RESET}"
+        local sources_files=()
+        [ -f /etc/apt/sources.list ] && sources_files+=("/etc/apt/sources.list")
+        for f in /etc/apt/sources.list.d/*.list; do
+            [ -f "$f" ] && sources_files+=("$f")
+        done
+
+        if [ ${#sources_files[@]} -eq 0 ]; then
+            echo -e "${YELLOW}[!] 未找到 APT 源配置文件，跳过换源${RESET}"
+            return
         fi
+
+        if grep -q "mirrors.aliyun.com" "${sources_files[@]}" 2>/dev/null; then
+            echo -e "${YELLOW}[!] APT 源已经是阿里云，跳过换源${RESET}"
+            return
+        fi
+
+        echo -e "${BLUE}[*] 检测到 Debian 系统，正在备份并切换为阿里云镜像源...${RESET}"
+        local date_suffix
+        date_suffix=$(date +%Y%m%d)
+        for f in "${sources_files[@]}"; do
+            sudo cp "$f" "${f}.bak_${date_suffix}"
+            sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' "$f"
+            sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' "$f"
+        done
+        sudo apt update -y
     elif [ -f /etc/redhat-release ]; then
         if ! grep -q "mirrors.aliyun.com" /etc/yum.repos.d/*.repo 2>/dev/null; then
             echo -e "${BLUE}[*] 检测到 RedHat 系列系统，正在配置阿里云 YUM 源...${RESET}"
@@ -69,15 +85,14 @@ setup_bashrc_base() {
         [ ! -f ~/.bashrc.bak_origin ] && cp ~/.bashrc ~/.bashrc.bak_origin
         sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' ~/.bashrc
     fi
+}
 
-    # 清理所有旧格式的自定义内容（包括各种历史版本）
+setup_bashrc_clean_scripts() {
     if [ -f ~/.bashrc ]; then
-        # 删除旧的 neofetch 相关内容
         sed -i '/command -v neofetch/d' ~/.bashrc
         sed -i '/# 显示系统信息/d' ~/.bashrc
         sed -i '/# 登录显示系统信息/d' ~/.bashrc
 
-        # 删除旧的单条注释+命令格式
         sed -i '/# 挂载nas/d' ~/.bashrc
         sed -i '/# 同步hosts/d' ~/.bashrc
         sed -i '/# 监测可ssh设备/d' ~/.bashrc
@@ -91,18 +106,20 @@ setup_bashrc_base() {
         sed -i '/# 自定义脚本/d' ~/.bashrc
         sed -i '/# linux-deploy 自定义脚本/d' ~/.bashrc
 
-        # 删除旧命令行
         sed -i '/\[ -x ~\/scripts\/check_nas.sh \] && ~/d' ~/.bashrc
+        sed -i '/\[ -x ~\/scripts\/storage_scan.sh \] && ~/d' ~/.bashrc
         sed -i '/\[ -x ~\/scripts\/sync_hosts.sh \] && ~/d' ~/.bashrc
         sed -i '/\[ -x ~\/scripts\/lan_scan.sh \] && ~/d' ~/.bashrc
         sed -i '/alias lan=.*/d' ~/.bashrc
 
-        # 删除整个 linux-deploy 区块（如果有）
         if grep -q "# linux-deploy-start" ~/.bashrc 2>/dev/null; then
             sed -i '/# linux-deploy-start/,/# linux-deploy-end/d' ~/.bashrc
         fi
+    fi
+}
 
-        # 删除旧版独立的 R2 配置块（迁移到区块内）
+setup_bashrc_clean_r2() {
+    if [ -f ~/.bashrc ]; then
         sed -i '/# Cloudflare R2 配置/d' ~/.bashrc
         sed -i '/# 如需修改，请编辑 ~\/.bashrc/d' ~/.bashrc
         sed -i '/^export R2_ACCESS_KEY_ID=/d' ~/.bashrc
@@ -124,7 +141,7 @@ write_linux_deploy_block() {
         echo -e "${GREEN}[✓] 已添加: 登录显示系统信息${RESET}"
     fi
     if [ "${CHECKED[$((PKG_COUNT + 1))]:-0}" = "1" ]; then
-        scripts_section+="[ -x ~/scripts/check_nas.sh ] && sudo ~/scripts/check_nas.sh -q\n"
+        scripts_section+="[ -x ~/scripts/storage_scan.sh ] && sudo ~/scripts/storage_scan.sh\n"
         echo -e "${GREEN}[✓] 已添加: 登录自动挂载 NAS${RESET}"
     fi
     if [ "${CHECKED[$((PKG_COUNT + 2))]:-0}" = "1" ]; then
@@ -187,27 +204,59 @@ write_linux_deploy_block() {
 # 配置结果存储在全局变量 R2_CONFIG_SECTION 中
 R2_CONFIG_SECTION=""
 
+get_existing_r2_value() {
+    local key="$1"
+    if [ -f ~/.bashrc ]; then
+        grep "^export $key=" ~/.bashrc | head -n 1 | sed "s/^export $key=//"
+    fi
+}
+
 configure_r2() {
     echo
     echo -e "${BLUE}[*] 配置 Cloudflare R2（可选）${RESET}"
     echo -e "${BLUE}    用于从 R2 下载 hosts 等文件${RESET}"
-    read -p "是否现在配置 R2? (y/n，默认 n): " configure_now
-    if [[ "$configure_now" =~ ^[Yy]$ ]]; then
-        read -p "R2_ACCESS_KEY_ID: " r2_access_key_id
-        read -p "R2_SECRET_ACCESS_KEY: " r2_secret_access_key
-        read -p "R2_BUCKET_NAME: " r2_bucket_name
-        read -p "R2_ENDPOINT_URL: " r2_endpoint_url
-        read -p "R2_PUBLIC_URL: " r2_public_url
-    else
-        echo -e "${YELLOW}[!] 已跳过，将在 ~/.bashrc 中写入占位符，日后可手动修改${RESET}"
-        r2_access_key_id="YOUR_R2_ACCESS_KEY_ID"
-        r2_secret_access_key="YOUR_R2_SECRET_ACCESS_KEY"
-        r2_bucket_name="YOUR_R2_BUCKET_NAME"
-        r2_endpoint_url="YOUR_R2_ENDPOINT_URL"
-        r2_public_url="YOUR_R2_PUBLIC_URL"
+
+    local default_id="$EXISTING_R2_ID"
+    local default_secret="$EXISTING_R2_SECRET"
+    local default_bucket="$EXISTING_R2_BUCKET"
+    local default_endpoint="$EXISTING_R2_ENDPOINT"
+    local default_public="$EXISTING_R2_PUBLIC"
+
+    if [ "$KEEP_OLD_CONFIG" -eq 1 ] && [ -n "$default_id" ]; then
+        echo -e "${GREEN}[*] 检测到已有 R2 配置，将使用现有值${RESET}"
     fi
 
-    # 存储到全局变量，供 write_linux_deploy_block 使用
+    read -p "是否现在配置 R2? (y/n，默认 n): " configure_now
+    if [[ "$configure_now" =~ ^[Yy]$ ]]; then
+        read -p "R2_ACCESS_KEY_ID [$default_id]: " r2_access_key_id
+        read -p "R2_SECRET_ACCESS_KEY [$default_secret]: " r2_secret_access_key
+        read -p "R2_BUCKET_NAME [$default_bucket]: " r2_bucket_name
+        read -p "R2_ENDPOINT_URL [$default_endpoint]: " r2_endpoint_url
+        read -p "R2_PUBLIC_URL [$default_public]: " r2_public_url
+
+        r2_access_key_id="${r2_access_key_id:-$default_id}"
+        r2_secret_access_key="${r2_secret_access_key:-$default_secret}"
+        r2_bucket_name="${r2_bucket_name:-$default_bucket}"
+        r2_endpoint_url="${r2_endpoint_url:-$default_endpoint}"
+        r2_public_url="${r2_public_url:-$default_public}"
+    else
+        if [ "$KEEP_OLD_CONFIG" -eq 1 ] && [ -n "$default_id" ]; then
+            echo -e "${GREEN}[*] 使用已有的 R2 配置${RESET}"
+            r2_access_key_id="$default_id"
+            r2_secret_access_key="$default_secret"
+            r2_bucket_name="$default_bucket"
+            r2_endpoint_url="$default_endpoint"
+            r2_public_url="$default_public"
+        else
+            echo -e "${YELLOW}[!] 已跳过，将在 ~/.bashrc 中写入占位符，日后可手动修改${RESET}"
+            r2_access_key_id="YOUR_R2_ACCESS_KEY_ID"
+            r2_secret_access_key="YOUR_R2_SECRET_ACCESS_KEY"
+            r2_bucket_name="YOUR_R2_BUCKET_NAME"
+            r2_endpoint_url="YOUR_R2_ENDPOINT_URL"
+            r2_public_url="YOUR_R2_PUBLIC_URL"
+        fi
+    fi
+
     R2_CONFIG_SECTION="# Cloudflare R2 配置\n"
     R2_CONFIG_SECTION+="export R2_ACCESS_KEY_ID=$r2_access_key_id\n"
     R2_CONFIG_SECTION+="export R2_SECRET_ACCESS_KEY=$r2_secret_access_key\n"
@@ -514,10 +563,11 @@ setup_sudoers() {
     local sudoers_file="/etc/sudoers.d/linux_deploy"
     local need_update=0
 
-    # 检查是否需要更新（文件不存在或缺少 SETENV）
+    # 检查是否需要更新（文件不存在、缺少存储脚本或 SETENV）
     if [ -f "$sudoers_file" ]; then
-        if ! sudo grep -q "SETENV:" "$sudoers_file" 2>/dev/null; then
-            echo -e "${YELLOW}[!] sudoers 配置需要更新（添加 SETENV 权限）${RESET}"
+        if ! sudo grep -q "$HOME/scripts/storage_scan.sh" "$sudoers_file" 2>/dev/null || \
+           ! sudo grep -q "SETENV:" "$sudoers_file" 2>/dev/null; then
+            echo -e "${YELLOW}[!] sudoers 配置需要更新${RESET}"
             need_update=1
         else
             echo -e "${YELLOW}[!] sudoers 免密已配置，跳过${RESET}"
@@ -531,7 +581,7 @@ setup_sudoers() {
         echo -e "${BLUE}[*] 正在配置 passwordless sudo（需输入一次密码）...${RESET}"
 
         sudo tee "$sudoers_file" > /dev/null <<EOF
-$USER ALL=(ALL) NOPASSWD: $HOME/scripts/check_nas.sh
+$USER ALL=(ALL) NOPASSWD: $HOME/scripts/storage_scan.sh
 $USER ALL=(ALL) NOPASSWD: SETENV: $HOME/scripts/sync_hosts.sh
 $USER ALL=(ALL) NOPASSWD: $HOME/scripts/lan_scan.sh
 EOF
@@ -557,14 +607,56 @@ run_deploy() {
     echo -e "${YELLOW}  [!] 警告: 即将清除 ~/.bashrc 中的旧配置${RESET}"
     echo -e "${YELLOW}      包括 linux-deploy 区块和独立 R2 配置${RESET}"
     echo -e "${YELLOW}=================================${RESET}"
-    read -p "是否继续? (y/n，默认 y): " confirm_clear
-    if [[ "$confirm_clear" =~ ^[Nn]$ ]]; then
-        echo -e "${YELLOW}[!] 已取消部署${RESET}"
-        exit 0
+    echo -e "${YELLOW}  请选择处理方式：${RESET}"
+    echo -e "${YELLOW}    1) 保留旧配置（保留 R2 export 配置）${RESET}"
+    echo -e "${YELLOW}    2) 全部清除（清除所有旧配置）${RESET}"
+    echo -e "${YELLOW}    3) 取消（终止执行）${RESET}"
+    echo -e "${YELLOW}=================================${RESET}"
+    read -p "请输入选择 [1/2/3]，默认 1: " clear_option
+    KEEP_OLD_CONFIG=0
+    EXISTING_R2_ID=""
+    EXISTING_R2_SECRET=""
+    EXISTING_R2_BUCKET=""
+    EXISTING_R2_ENDPOINT=""
+    EXISTING_R2_PUBLIC=""
+
+    if [[ "$clear_option" == "1" || -z "$clear_option" ]]; then
+        EXISTING_R2_ID=$(get_existing_r2_value "R2_ACCESS_KEY_ID")
+        EXISTING_R2_SECRET=$(get_existing_r2_value "R2_SECRET_ACCESS_KEY")
+        EXISTING_R2_BUCKET=$(get_existing_r2_value "R2_BUCKET_NAME")
+        EXISTING_R2_ENDPOINT=$(get_existing_r2_value "R2_ENDPOINT_URL")
+        EXISTING_R2_PUBLIC=$(get_existing_r2_value "R2_PUBLIC_URL")
     fi
 
-    # --- 清除旧配置 ---
-    setup_bashrc_base
+    case "$clear_option" in
+        1|"")
+            echo -e "${GREEN}[*] 选择保留旧配置，仅清除 linux-deploy 区块${RESET}"
+            KEEP_OLD_CONFIG=1
+            setup_bashrc_base
+            setup_bashrc_clean_scripts
+            ;;
+        2)
+            echo -e "${GREEN}[*] 选择全部清除，将清除所有旧配置${RESET}"
+            setup_bashrc_base
+            setup_bashrc_clean_scripts
+            setup_bashrc_clean_r2
+            ;;
+        3)
+            echo -e "${YELLOW}[!] 已取消部署${RESET}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}[!] 无效选择，默认执行保留旧配置${RESET}"
+            KEEP_OLD_CONFIG=1
+            EXISTING_R2_ID=$(get_existing_r2_value "R2_ACCESS_KEY_ID")
+            EXISTING_R2_SECRET=$(get_existing_r2_value "R2_SECRET_ACCESS_KEY")
+            EXISTING_R2_BUCKET=$(get_existing_r2_value "R2_BUCKET_NAME")
+            EXISTING_R2_ENDPOINT=$(get_existing_r2_value "R2_ENDPOINT_URL")
+            EXISTING_R2_PUBLIC=$(get_existing_r2_value "R2_PUBLIC_URL")
+            setup_bashrc_base
+            setup_bashrc_clean_scripts
+            ;;
+    esac
     echo
 
     echo -e "${GREEN}=================================${RESET}"
