@@ -3,6 +3,13 @@
 # 参数默认值
 USE_R2=0
 QUIET=0
+AWS_CMD=""
+
+# 在可能提权前记录当前用户能找到的 aws 路径，以便 root 进程使用
+# 必须 export，因为 sudo -E 只会传递环境变量，不会传递脚本局部变量
+if command -v aws &>/dev/null; then
+    export AWS_CMD=$(command -v aws)
+fi
 
 # 路径变量
 SRC="/mnt/nas/OneDrive-Sync/PC/host/main/hosts"
@@ -19,9 +26,13 @@ DEST="/etc/hosts"
 TMP="/tmp/hosts_clean"
 HOSTNAME=$(hostname)
 
+# 获取脚本绝对路径
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
+
 # 自动提权：如果当前不是 root，用 sudo -E 重新执行本脚本，保留 R2 等环境变量
 if [ "$EUID" -ne 0 ]; then
-    exec sudo -E "$0" "$@"
+    exec sudo -E "$SCRIPT_PATH" "$@"
 fi
 
 # R2 模式：从环境变量读取配置并下载 hosts
@@ -37,13 +48,17 @@ if [ "$USE_R2" -eq 1 ]; then
         fi
     # 否则使用 AWS CLI + API 凭证
     elif [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ] && [ -n "$R2_BUCKET_NAME" ] && [ -n "$R2_ENDPOINT_URL" ]; then
-        if ! command -v aws &>/dev/null; then
-            [ "$QUIET" -ne 1 ] && echo "错误: 未安装 aws CLI，请先安装: sudo apt install awscli" >&2
+        # 在提权前定位 aws 命令路径，通过环境变量传递给 root 进程（避免 root PATH 不同）
+        if [ -z "${AWS_CMD:-}" ] && command -v aws &>/dev/null; then
+            AWS_CMD=$(command -v aws)
+        fi
+        if [ -z "${AWS_CMD:-}" ]; then
+            [ "$QUIET" -ne 1 ] && echo "错误: 未安装 aws CLI，请先安装: sudo apt install python3-pip && sudo python3 -m pip install awscli" >&2
             exit 1
         fi
         if ! AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
              AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
-             aws --endpoint-url="$R2_ENDPOINT_URL" s3 cp "s3://${R2_BUCKET_NAME}/${R2_FILE_PATH}" "$SRC" --quiet 2>/dev/null; then
+             "$AWS_CMD" --endpoint-url="$R2_ENDPOINT_URL" s3 cp "s3://${R2_BUCKET_NAME}/${R2_FILE_PATH}" "$SRC" --quiet 2>/dev/null; then
             [ "$QUIET" -ne 1 ] && echo "错误: 从 R2 API 下载 hosts 失败" >&2
             exit 1
         fi

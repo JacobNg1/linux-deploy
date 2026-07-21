@@ -15,6 +15,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 setup_sources() {
     if [ -f /etc/debian_version ]; then
+        local distro_name="Debian"
+        if [ -f /etc/os-release ]; then
+            local name=$(grep "^NAME=" /etc/os-release | sed 's/NAME="\(.*\)"/\1/')
+            if [[ "$name" == *Ubuntu* ]]; then
+                distro_name="Ubuntu"
+            fi
+        fi
+
         local sources_files=()
         [ -f /etc/apt/sources.list ] && sources_files+=("/etc/apt/sources.list")
         for f in /etc/apt/sources.list.d/*.list; do
@@ -26,20 +34,48 @@ setup_sources() {
             return
         fi
 
-        if grep -q "mirrors.aliyun.com" "${sources_files[@]}" 2>/dev/null; then
-            echo -e "${YELLOW}[!] APT 源已经是阿里云，跳过换源${RESET}"
-            return
+        local need_update=0
+
+        if [ "$distro_name" = "Ubuntu" ]; then
+            if ! grep -q "universe" /etc/apt/sources.list 2>/dev/null; then
+                echo -e "${BLUE}[*] 为 ${distro_name} 启用 universe/multiverse 仓库...${RESET}"
+                [ ! -f /etc/apt/sources.list.bak ] && sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak
+                sudo sed -i '/^deb/s/ main$/ main universe multiverse/' /etc/apt/sources.list
+                need_update=1
+            fi
         fi
 
-        echo -e "${BLUE}[*] 检测到 Debian 系统，正在备份并切换为阿里云镜像源...${RESET}"
-        local date_suffix
-        date_suffix=$(date +%Y%m%d)
-        for f in "${sources_files[@]}"; do
-            sudo cp "$f" "${f}.bak_${date_suffix}"
-            sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' "$f"
-            sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' "$f"
-        done
-        sudo apt update -y
+        if ! grep -q "mirrors.aliyun.com" /etc/apt/sources.list 2>/dev/null; then
+            need_update=1
+            echo -e "${BLUE}[*] 检测到 ${distro_name} 系统，正在备份并切换为阿里云镜像源...${RESET}"
+            [ ! -f /etc/apt/sources.list.bak ] && sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak
+            if [ "$distro_name" = "Ubuntu" ]; then
+                sudo sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+                sudo sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+            else
+                sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+                sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+            fi
+        elif ! grep -q "mirrors.aliyun.com" "${sources_files[@]}" 2>/dev/null; then
+            need_update=1
+            echo -e "${BLUE}[*] 检测到 ${distro_name} 系统，部分源非阿里云，正在切换...${RESET}"
+            for f in "${sources_files[@]}"; do
+                [ ! -f "${f}.bak" ] && sudo cp "$f" "${f}.bak"
+                if [ "$distro_name" = "Ubuntu" ]; then
+                    sudo sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' "$f"
+                    sudo sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' "$f"
+                else
+                    sudo sed -i 's/deb.debian.org/mirrors.aliyun.com/g' "$f"
+                    sudo sed -i 's/security.debian.org/mirrors.aliyun.com/g' "$f"
+                fi
+            done
+        else
+            echo -e "${YELLOW}[!] APT 源已经是阿里云，跳过换源${RESET}"
+        fi
+
+        if [ "$need_update" -eq 1 ]; then
+            sudo apt update -y
+        fi
     elif [ -f /etc/redhat-release ]; then
         if ! grep -q "mirrors.aliyun.com" /etc/yum.repos.d/*.repo 2>/dev/null; then
             echo -e "${BLUE}[*] 检测到 RedHat 系列系统，正在配置阿里云 YUM 源...${RESET}"
@@ -56,8 +92,8 @@ setup_sources() {
 
 install_pkg() {
     local input="$1"
-    local pkg="${input%%:*}"    # 包名（冒号前）
-    local cmd="${input#*:}"     # 命令名（冒号后，如果没有冒号则等于包名）
+    local pkg="${input%%:*}"
+    local cmd="${input#*:}"
     [ "$cmd" = "$input" ] && cmd="$pkg"
     
     if command -v "$cmd" &> /dev/null; then
@@ -66,10 +102,24 @@ install_pkg() {
     fi
     echo -e "${BLUE}[*] 正在安装 $pkg...${RESET}"
     if [ -f /etc/debian_version ]; then
-        sudo apt install -y "$pkg" && return 0
+        if sudo apt install -y "$pkg"; then
+            return 0
+        else
+            if [ "$pkg" = "awscli" ]; then
+                echo -e "${YELLOW}[!] apt 安装 awscli 失败${RESET}"
+                echo -e "${YELLOW}[!] Ubuntu 24.04+ 默认启用 PEP 668，无法使用系统 pip 安装${RESET}"
+                echo -e "${YELLOW}[!] 请手动安装：${RESET}"
+                echo -e "${YELLOW}[!]   方案1: sudo apt install pipx && pipx install awscli${RESET}"
+                echo -e "${YELLOW}[!]   方案2: 创建 venv 环境并安装${RESET}"
+                echo -e "${YELLOW}[!] 安装后请确保 aws 命令在 PATH 中${RESET}"
+            fi
+            echo -e "${YELLOW}[!] 安装 $pkg 失败，已跳过${RESET}"
+            return 1
+        fi
     elif [ -f /etc/redhat-release ]; then
         sudo yum install -y "$pkg" && return 0
     fi
+    echo -e "${YELLOW}[!] 安装 $pkg 失败，已跳过${RESET}"
     return 1
 }
 
@@ -563,10 +613,27 @@ setup_sudoers() {
     local sudoers_file="/etc/sudoers.d/linux_deploy"
     local need_update=0
 
-    # 检查是否需要更新（文件不存在、缺少存储脚本或 SETENV）
+    # 检查主 sudoers 文件中是否有旧配置，需要清理
+    if sudo grep -q "sync_hosts.sh\|storage_scan.sh\|lan_scan.sh" /etc/sudoers 2>/dev/null; then
+        echo -e "${BLUE}[*] 检测到 /etc/sudoers 中存在旧配置，正在清理...${RESET}"
+        local tmp_file=$(mktemp)
+        sudo grep -v "sync_hosts.sh\|storage_scan.sh\|lan_scan.sh" /etc/sudoers > "$tmp_file"
+        if sudo visudo -c -f "$tmp_file" 2>/dev/null; then
+            sudo cp "$tmp_file" /etc/sudoers
+            sudo chmod 440 /etc/sudoers
+            echo -e "${GREEN}[✓] 已清理 /etc/sudoers 中的旧配置${RESET}"
+        else
+            echo -e "${YELLOW}[!] 清理旧配置失败，请手动编辑 /etc/sudoers${RESET}"
+        fi
+        rm -f "$tmp_file"
+        need_update=1
+    fi
+
+    # 检查是否需要更新（文件不存在、缺少脚本路径或 SETENV 未正确配置）
     if [ -f "$sudoers_file" ]; then
         if ! sudo grep -q "$HOME/scripts/storage_scan.sh" "$sudoers_file" 2>/dev/null || \
-           ! sudo grep -q "SETENV:" "$sudoers_file" 2>/dev/null; then
+           ! sudo grep -q "$HOME/scripts/lan_scan.sh" "$sudoers_file" 2>/dev/null || \
+           ! sudo grep -q "SETENV:.*sync_hosts.sh" "$sudoers_file" 2>/dev/null; then
             echo -e "${YELLOW}[!] sudoers 配置需要更新${RESET}"
             need_update=1
         else
