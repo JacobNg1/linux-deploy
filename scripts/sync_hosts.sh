@@ -6,8 +6,9 @@ QUIET=0
 AWS_CMD=""
 
 # 在可能提权前记录当前用户能找到的 aws 路径，以便 root 进程使用
+# 必须 export，因为 sudo -E 只会传递环境变量，不会传递脚本局部变量
 if command -v aws &>/dev/null; then
-    AWS_CMD=$(command -v aws)
+    export AWS_CMD=$(command -v aws)
 fi
 
 # 路径变量

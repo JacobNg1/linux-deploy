@@ -106,11 +106,12 @@ install_pkg() {
             return 0
         else
             if [ "$pkg" = "awscli" ]; then
-                echo -e "${YELLOW}[!] apt 安装 awscli 失败，尝试使用系统 python3-pip 安装...${RESET}"
-                if sudo apt install -y python3-pip && sudo python3 -m pip install awscli; then
-                    return 0
-                fi
-                echo -e "${YELLOW}[!] pip 安装 awscli 失败，已跳过${RESET}"
+                echo -e "${YELLOW}[!] apt 安装 awscli 失败${RESET}"
+                echo -e "${YELLOW}[!] Ubuntu 24.04+ 默认启用 PEP 668，无法使用系统 pip 安装${RESET}"
+                echo -e "${YELLOW}[!] 请手动安装：${RESET}"
+                echo -e "${YELLOW}[!]   方案1: sudo apt install pipx && pipx install awscli${RESET}"
+                echo -e "${YELLOW}[!]   方案2: 创建 venv 环境并安装${RESET}"
+                echo -e "${YELLOW}[!] 安装后请确保 aws 命令在 PATH 中${RESET}"
             fi
             echo -e "${YELLOW}[!] 安装 $pkg 失败，已跳过${RESET}"
             return 1
