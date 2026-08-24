@@ -106,7 +106,7 @@ download_file() {
     local local_path="$2"
     local filename=$(basename "$local_path")
 
-    local raw_url="https://gitee.com/$GITEE_OWNER/$GITEE_REPO/raw/$GITEE_BRANCH/$file_path"
+    local raw_url="https://gitee.com/$GITEE_OWNER/$GITEE_REPO/raw/$GITEE_BRANCH/$file_path?cache_bust=$(date +%s%N)"
 
     echo -e "${BLUE}[*] 正在下载 $filename ...${RESET}"
 
