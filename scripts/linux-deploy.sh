@@ -90,6 +90,53 @@ setup_sources() {
     fi
 }
 
+install_awscli_official() {
+    local url temp_dir
+
+    case "$(uname -m)" in
+        x86_64) url="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" ;;
+        aarch64|arm64) url="https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" ;;
+        *)
+            echo -e "${YELLOW}[!] 不支持的 CPU 架构，无法自动安装 AWS CLI: $(uname -m)${RESET}"
+            return 1
+            ;;
+    esac
+
+    echo -e "${BLUE}[*] 正在通过 AWS 官方安装包安装 AWS CLI...${RESET}"
+    if ! sudo apt install -y curl unzip; then
+        echo -e "${YELLOW}[!] 安装 AWS CLI 所需的 curl 或 unzip 失败${RESET}"
+        return 1
+    fi
+
+    temp_dir=$(mktemp -d) || return 1
+    if ! curl -fsSL "$url" -o "$temp_dir/awscliv2.zip" ||
+       ! unzip -q "$temp_dir/awscliv2.zip" -d "$temp_dir" ||
+       ! sudo "$temp_dir/aws/install"; then
+        echo -e "${YELLOW}[!] AWS CLI 官方安装包安装失败${RESET}"
+        rm -rf "$temp_dir"
+        return 1
+    fi
+
+    rm -rf "$temp_dir"
+    return 0
+}
+
+setup_fastfetch_ppa() {
+    if apt-cache show fastfetch &> /dev/null; then
+        return 0
+    fi
+
+    echo -e "${BLUE}[*] 当前软件源未提供 fastfetch，正在添加 PPA...${RESET}"
+    if ! command -v add-apt-repository &> /dev/null &&
+       ! sudo apt install -y software-properties-common; then
+        echo -e "${YELLOW}[!] 安装 software-properties-common 失败${RESET}"
+        return 1
+    fi
+
+    sudo add-apt-repository -y ppa:zhangsongcui3371/fastfetch &&
+        sudo apt update
+}
+
 install_pkg() {
     local input="$1"
     local pkg="${input%%:*}"
@@ -102,16 +149,16 @@ install_pkg() {
     fi
     echo -e "${BLUE}[*] 正在安装 $pkg...${RESET}"
     if [ -f /etc/debian_version ]; then
+        if [ "$pkg" = "fastfetch" ]; then
+            setup_fastfetch_ppa || return 1
+        fi
+
         if sudo apt install -y "$pkg"; then
             return 0
         else
             if [ "$pkg" = "awscli" ]; then
                 echo -e "${YELLOW}[!] apt 安装 awscli 失败${RESET}"
-                echo -e "${YELLOW}[!] Ubuntu 24.04+ 默认启用 PEP 668，无法使用系统 pip 安装${RESET}"
-                echo -e "${YELLOW}[!] 请手动安装：${RESET}"
-                echo -e "${YELLOW}[!]   方案1: sudo apt install pipx && pipx install awscli${RESET}"
-                echo -e "${YELLOW}[!]   方案2: 创建 venv 环境并安装${RESET}"
-                echo -e "${YELLOW}[!] 安装后请确保 aws 命令在 PATH 中${RESET}"
+                install_awscli_official && return 0
             fi
             echo -e "${YELLOW}[!] 安装 $pkg 失败，已跳过${RESET}"
             return 1

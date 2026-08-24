@@ -47,23 +47,28 @@ if [ "$USE_R2" -eq 1 ]; then
             exit 1
         fi
     # 否则使用 AWS CLI + API 凭证
-    elif [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ] && [ -n "$R2_BUCKET_NAME" ] && [ -n "$R2_ENDPOINT_URL" ]; then
+    elif [ -n "$R2_ACCESS_KEY_ID" ] && [[ "$R2_ACCESS_KEY_ID" != YOUR_* ]] &&
+         [ -n "$R2_SECRET_ACCESS_KEY" ] && [[ "$R2_SECRET_ACCESS_KEY" != YOUR_* ]] &&
+         [ -n "$R2_BUCKET_NAME" ] && [[ "$R2_BUCKET_NAME" != YOUR_* ]] &&
+         [ -n "$R2_ENDPOINT_URL" ] && [[ "$R2_ENDPOINT_URL" != YOUR_* ]]; then
         # 在提权前定位 aws 命令路径，通过环境变量传递给 root 进程（避免 root PATH 不同）
         if [ -z "${AWS_CMD:-}" ] && command -v aws &>/dev/null; then
             AWS_CMD=$(command -v aws)
         fi
         if [ -z "${AWS_CMD:-}" ]; then
-            [ "$QUIET" -ne 1 ] && echo "错误: 未安装 aws CLI，请先安装: sudo apt install python3-pip && sudo python3 -m pip install awscli" >&2
+            [ "$QUIET" -ne 1 ] && echo "错误: 未安装 aws CLI，请先安装: sudo apt update && sudo apt install -y awscli" >&2
             exit 1
         fi
-        if ! AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
-             AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
-             "$AWS_CMD" --endpoint-url="$R2_ENDPOINT_URL" s3 cp "s3://${R2_BUCKET_NAME}/${R2_FILE_PATH}" "$SRC" --quiet 2>/dev/null; then
+        if ! AWS_ERROR=$(AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+                         AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+                         "$AWS_CMD" --region auto --endpoint-url="$R2_ENDPOINT_URL" \
+                         s3 cp "s3://${R2_BUCKET_NAME}/${R2_FILE_PATH}" "$SRC" --quiet 2>&1); then
             [ "$QUIET" -ne 1 ] && echo "错误: 从 R2 API 下载 hosts 失败" >&2
+            [ "$QUIET" -ne 1 ] && echo "$AWS_ERROR" >&2
             exit 1
         fi
     else
-        [ "$QUIET" -ne 1 ] && echo "错误: 未配置 R2 凭证，请配置 ~/.bashrc 中的 R2 环境变量" >&2
+        [ "$QUIET" -ne 1 ] && echo "错误: R2 凭证或 Endpoint 未配置，不能使用 YOUR_R2_* 占位值" >&2
         exit 1
     fi
 fi
