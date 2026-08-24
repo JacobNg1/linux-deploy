@@ -124,6 +124,14 @@ install_pkg() {
 }
 
 setup_git() {
+    if ! command -v git &> /dev/null; then
+        echo -e "${BLUE}[*] 未检测到 Git，正在安装...${RESET}"
+        if ! install_pkg "git:git"; then
+            echo -e "${YELLOW}[!] Git 安装失败，跳过 Git 核心信息配置${RESET}"
+            return 1
+        fi
+    fi
+
     echo -e "${BLUE}[*] 配置 Git 核心信息...${RESET}"
     git config --global user.name "Jacob"
     git config --global user.email "jacob_ng@163.com"
