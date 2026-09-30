@@ -108,11 +108,17 @@ download_file() {
     local filename=$(basename "$local_path")
 
     local gitee_url="https://gitee.com/$GITEE_OWNER/$GITEE_REPO/raw/$GITEE_BRANCH/$file_path"
+    local gitee_archive_url="https://gitee.com/$GITEE_OWNER/$GITEE_REPO/repository/archive/$GITEE_BRANCH.tar.gz"
     local github_url="https://raw.githubusercontent.com/$GITHUB_OWNER/$GITEE_REPO/$GITEE_BRANCH/$file_path"
 
     echo -e "${BLUE}[*] 正在下载 $filename ...${RESET}"
 
     if curl -fsSL "$gitee_url" -o "$local_path"; then
+        echo -e "${GREEN}[✓] $filename 下载成功${RESET}"
+        chmod +x "$local_path"
+    elif curl -fsSL "$gitee_archive_url" |
+         tar -xOzf - --wildcards "*/$file_path" > "$local_path"; then
+        echo -e "${YELLOW}[!] Gitee Raw 下载失败，已自动切换 Gitee 压缩包${RESET}"
         echo -e "${GREEN}[✓] $filename 下载成功${RESET}"
         chmod +x "$local_path"
     elif curl -fsSL "$github_url" -o "$local_path"; then

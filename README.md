@@ -8,7 +8,7 @@ Jacob 设备自动化部署脚本，支持 Bash 和 Zsh 自动识别、键盘交
 curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash
 ```
 
-安装过程中若 Gitee Raw 下载失败，会自动切换到 GitHub 镜像。
+安装过程中若 Gitee Raw 下载失败，会依次尝试 Gitee 分支压缩包和 GitHub 镜像。
 
 可选参数：
 
