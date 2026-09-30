@@ -63,7 +63,7 @@ if [ "$USE_R2" -eq 1 ]; then
             exit 1
         fi
     else
-        [ "$QUIET" -ne 1 ] && echo "错误: 未配置 R2 凭证，请配置 ~/.bashrc 中的 R2 环境变量" >&2
+        [ "$QUIET" -ne 1 ] && echo "错误: 未配置 R2 凭证，请在当前 Shell 配置文件中设置 R2 环境变量" >&2
         exit 1
     fi
 fi
