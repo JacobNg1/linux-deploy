@@ -1,12 +1,14 @@
 # Linux Deploy
 
-Jacob 设备自动化部署脚本，支持键盘交互式菜单选择功能，从 Gitee 在线拉取一键部署。
+Jacob 设备自动化部署脚本，支持 Bash 和 Zsh 自动识别、键盘交互式菜单选择功能，从 Gitee 在线拉取一键部署。
 
 ## 快速启动
 
 ```bash
 curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash
 ```
+
+安装过程中若 Gitee Raw 下载失败，会依次尝试 Gitee 分支压缩包和 GitHub 镜像。
 
 可选参数：
 
@@ -77,12 +79,13 @@ curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash 
 [✓] 已添加: ll、la、l 快捷别名
 [✓] 已添加: lan 快捷别名
 [✓] 已添加: 代理开关别名
-[✓] 已更新 ~/.bashrc 的 linux-deploy 区块
+[*] 检测到当前 Shell: zsh
+[✓] 已更新 ~/.zshrc 的 linux-deploy 区块
 [*] 正在配置 passwordless sudo（需输入一次密码）...
 [✓] sudoers 免密配置完成
 
 =================================
-  部署完成！请执行 source ~/.bashrc
+  部署完成！请执行 source ~/.zshrc
 =================================
 ```
 
@@ -98,9 +101,9 @@ jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/lan_scan.sh
 
 首次部署需输入一次 sudo 密码，之后所有脚本自动免密运行。语法自动校验，出错时自动回滚。
 
-## \~/.bashrc 写入格式
+## Shell 配置文件写入格式
 
-所有自定义内容集中在 `# linux-deploy-start` / `# linux-deploy-end` 区块内，脚本可完整重写此区块：
+脚本优先识别当前交互式 Shell，并以 `$SHELL` 作为回退，自动选择 `~/.bashrc` 或 `~/.zshrc`。所有自定义内容集中在 `# linux-deploy-start` / `# linux-deploy-end` 区块内，可完整重写：
 
 ```bash
 # linux-deploy-start

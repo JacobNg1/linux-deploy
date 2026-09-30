@@ -11,6 +11,42 @@ RESET='\033[00m'
 # 脚本所在目录（兼容本地执行和在线下载执行）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+detect_shell_config() {
+    local shell_name
+    shell_name="${DEPLOY_SHELL:-}"
+
+    if [ -z "$shell_name" ]; then
+        shell_name="$(ps -p "$PPID" -o comm= 2>/dev/null | tr -d ' ')"
+        shell_name="${shell_name#-}"
+    fi
+
+    case "$shell_name" in
+        bash|zsh) ;;
+        *) shell_name="" ;;
+    esac
+
+    [ -z "$shell_name" ] && shell_name="$(basename "${SHELL:-}")"
+
+    if [ -z "$shell_name" ] && command -v getent >/dev/null 2>&1; then
+        shell_name="$(basename "$(getent passwd "$(id -un)" | cut -d: -f7)")"
+    fi
+
+    case "$shell_name" in
+        zsh)
+            SHELL_NAME="zsh"
+            SHELL_RC="$HOME/.zshrc"
+            SHELL_RC_DISPLAY="~/.zshrc"
+            ;;
+        *)
+            SHELL_NAME="bash"
+            SHELL_RC="$HOME/.bashrc"
+            SHELL_RC_DISPLAY="~/.bashrc"
+            ;;
+    esac
+}
+
+detect_shell_config
+
 # ==================== 基础功能 ====================
 
 setup_sources() {
@@ -185,57 +221,63 @@ setup_git() {
     git config --global init.defaultBranch main
 }
 
-setup_bashrc_base() {
-    if [ -f ~/.bashrc ]; then
-        [ ! -f ~/.bashrc.bak_origin ] && cp ~/.bashrc ~/.bashrc.bak_origin
-        sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' ~/.bashrc
+setup_shell_rc_base() {
+    touch "$SHELL_RC"
+    [ ! -f "${SHELL_RC}.bak_origin" ] && cp "$SHELL_RC" "${SHELL_RC}.bak_origin"
+
+    if [ "$SHELL_NAME" = "bash" ]; then
+        sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' "$SHELL_RC"
     fi
 }
 
-setup_bashrc_clean_scripts() {
-    if [ -f ~/.bashrc ]; then
-        sed -i '/command -v neofetch/d' ~/.bashrc
-        sed -i '/# 显示系统信息/d' ~/.bashrc
-        sed -i '/# 登录显示系统信息/d' ~/.bashrc
+setup_bashrc_base() {
+    setup_shell_rc_base
+}
 
-        sed -i '/# 挂载nas/d' ~/.bashrc
-        sed -i '/# 同步hosts/d' ~/.bashrc
-        sed -i '/# 监测可ssh设备/d' ~/.bashrc
-        sed -i '/# ll快捷命令/d' ~/.bashrc
-        sed -i '/# lan快捷别名/d' ~/.bashrc
-        sed -i '/# la快捷别名/d' ~/.bashrc
-        sed -i '/# l快捷别名/d' ~/.bashrc
-        sed -i '/# 登录自动挂载 NAS/d' ~/.bashrc
-        sed -i '/# 登录自动同步 hosts/d' ~/.bashrc
-        sed -i '/# 登录自动扫描 SSH 设备/d' ~/.bashrc
-        sed -i '/# 自定义脚本/d' ~/.bashrc
-        sed -i '/# linux-deploy 自定义脚本/d' ~/.bashrc
+setup_shell_rc_clean_scripts() {
+    if [ -f "$SHELL_RC" ]; then
+        sed -i '/command -v neofetch/d' "$SHELL_RC"
+        sed -i '/# 显示系统信息/d' "$SHELL_RC"
+        sed -i '/# 登录显示系统信息/d' "$SHELL_RC"
 
-        sed -i '/\[ -x ~\/scripts\/check_nas.sh \] && ~/d' ~/.bashrc
-        sed -i '/\[ -x ~\/scripts\/storage_scan.sh \] && ~/d' ~/.bashrc
-        sed -i '/\[ -x ~\/scripts\/sync_hosts.sh \] && ~/d' ~/.bashrc
-        sed -i '/\[ -x ~\/scripts\/lan_scan.sh \] && ~/d' ~/.bashrc
-        sed -i '/alias lan=.*/d' ~/.bashrc
+        sed -i '/# 挂载nas/d' "$SHELL_RC"
+        sed -i '/# 同步hosts/d' "$SHELL_RC"
+        sed -i '/# 监测可ssh设备/d' "$SHELL_RC"
+        sed -i '/# ll快捷命令/d' "$SHELL_RC"
+        sed -i '/# lan快捷别名/d' "$SHELL_RC"
+        sed -i '/# la快捷别名/d' "$SHELL_RC"
+        sed -i '/# l快捷别名/d' "$SHELL_RC"
+        sed -i '/# 登录自动挂载 NAS/d' "$SHELL_RC"
+        sed -i '/# 登录自动同步 hosts/d' "$SHELL_RC"
+        sed -i '/# 登录自动扫描 SSH 设备/d' "$SHELL_RC"
+        sed -i '/# 自定义脚本/d' "$SHELL_RC"
+        sed -i '/# linux-deploy 自定义脚本/d' "$SHELL_RC"
 
-        if grep -q "# linux-deploy-start" ~/.bashrc 2>/dev/null; then
-            sed -i '/# linux-deploy-start/,/# linux-deploy-end/d' ~/.bashrc
+        sed -i '/\[ -x ~\/scripts\/check_nas.sh \] && ~/d' "$SHELL_RC"
+        sed -i '/\[ -x ~\/scripts\/storage_scan.sh \] && ~/d' "$SHELL_RC"
+        sed -i '/\[ -x ~\/scripts\/sync_hosts.sh \] && ~/d' "$SHELL_RC"
+        sed -i '/\[ -x ~\/scripts\/lan_scan.sh \] && ~/d' "$SHELL_RC"
+        sed -i '/alias lan=.*/d' "$SHELL_RC"
+
+        if grep -q "# linux-deploy-start" "$SHELL_RC" 2>/dev/null; then
+            sed -i '/# linux-deploy-start/,/# linux-deploy-end/d' "$SHELL_RC"
         fi
     fi
 }
 
-setup_bashrc_clean_r2() {
-    if [ -f ~/.bashrc ]; then
-        sed -i '/# Cloudflare R2 配置/d' ~/.bashrc
-        sed -i '/# 如需修改，请编辑 ~\/.bashrc/d' ~/.bashrc
-        sed -i '/^export R2_ACCESS_KEY_ID=/d' ~/.bashrc
-        sed -i '/^export R2_SECRET_ACCESS_KEY=/d' ~/.bashrc
-        sed -i '/^export R2_BUCKET_NAME=/d' ~/.bashrc
-        sed -i '/^export R2_ENDPOINT_URL=/d' ~/.bashrc
-        sed -i '/^export R2_PUBLIC_URL=/d' ~/.bashrc
+setup_shell_rc_clean_r2() {
+    if [ -f "$SHELL_RC" ]; then
+        sed -i '/# Cloudflare R2 配置/d' "$SHELL_RC"
+        sed -i '/# 如需修改，请编辑 ~\/\.\(bashrc\|zshrc\)/d' "$SHELL_RC"
+        sed -i '/^export R2_ACCESS_KEY_ID=/d' "$SHELL_RC"
+        sed -i '/^export R2_SECRET_ACCESS_KEY=/d' "$SHELL_RC"
+        sed -i '/^export R2_BUCKET_NAME=/d' "$SHELL_RC"
+        sed -i '/^export R2_ENDPOINT_URL=/d' "$SHELL_RC"
+        sed -i '/^export R2_PUBLIC_URL=/d' "$SHELL_RC"
     fi
 }
 
-# 生成并写入 ~/.bashrc 的 linux-deploy 区块
+# 生成并写入当前 Shell 配置文件的 linux-deploy 区块
 write_linux_deploy_block() {
     local scripts_section=""
     local aliases_section=""
@@ -279,7 +321,7 @@ write_linux_deploy_block() {
 
     # 如果没有任何内容，不写入区块
     if [ -z "$scripts_section" ] && [ -z "$aliases_section" ] && [ -z "$R2_CONFIG_SECTION" ]; then
-        echo -e "${YELLOW}[!] 未选择任何快捷方式，跳过写入 ~/.bashrc${RESET}"
+        echo -e "${YELLOW}[!] 未选择任何快捷方式，跳过写入 $SHELL_RC_DISPLAY${RESET}"
         return
     fi
 
@@ -300,9 +342,8 @@ write_linux_deploy_block() {
 
     block+="# linux-deploy-end\n"
 
-    # 写入 ~/.bashrc
-    printf "%b" "$block" >> ~/.bashrc
-    echo -e "${GREEN}[✓] 已更新 ~/.bashrc 的 linux-deploy 区块${RESET}"
+    printf "%b" "$block" >> "$SHELL_RC"
+    echo -e "${GREEN}[✓] 已更新 $SHELL_RC_DISPLAY 的 linux-deploy 区块${RESET}"
 }
 
 # 配置 Cloudflare R2（可选）- 收集配置，返回配置字符串
@@ -311,8 +352,8 @@ R2_CONFIG_SECTION=""
 
 get_existing_r2_value() {
     local key="$1"
-    if [ -f ~/.bashrc ]; then
-        grep "^export $key=" ~/.bashrc | head -n 1 | sed "s/^export $key=//"
+    if [ -f "$SHELL_RC" ]; then
+        grep "^export $key=" "$SHELL_RC" | head -n 1 | sed "s/^export $key=//"
     fi
 }
 
@@ -353,7 +394,7 @@ configure_r2() {
             r2_endpoint_url="$default_endpoint"
             r2_public_url="$default_public"
         else
-            echo -e "${YELLOW}[!] 已跳过，将在 ~/.bashrc 中写入占位符，日后可手动修改${RESET}"
+            echo -e "${YELLOW}[!] 已跳过，将在 $SHELL_RC_DISPLAY 中写入占位符，日后可手动修改${RESET}"
             r2_access_key_id="YOUR_R2_ACCESS_KEY_ID"
             r2_secret_access_key="YOUR_R2_SECRET_ACCESS_KEY"
             r2_bucket_name="YOUR_R2_BUCKET_NAME"
@@ -726,7 +767,8 @@ run_deploy() {
     echo
     # --- 清除旧配置警告 ---
     echo -e "${YELLOW}=================================${RESET}"
-    echo -e "${YELLOW}  [!] 警告: 即将清除 ~/.bashrc 中的旧配置${RESET}"
+    echo -e "${YELLOW}  [*] 检测到当前 Shell: $SHELL_NAME${RESET}"
+    echo -e "${YELLOW}  [!] 警告: 即将清除 $SHELL_RC_DISPLAY 中的旧配置${RESET}"
     echo -e "${YELLOW}      包括 linux-deploy 区块和独立 R2 配置${RESET}"
     echo -e "${YELLOW}=================================${RESET}"
     echo -e "${YELLOW}  请选择处理方式：${RESET}"
@@ -754,14 +796,14 @@ run_deploy() {
         1|"")
             echo -e "${GREEN}[*] 选择保留旧配置，仅清除 linux-deploy 区块${RESET}"
             KEEP_OLD_CONFIG=1
-            setup_bashrc_base
-            setup_bashrc_clean_scripts
+            setup_shell_rc_base
+            setup_shell_rc_clean_scripts
             ;;
         2)
             echo -e "${GREEN}[*] 选择全部清除，将清除所有旧配置${RESET}"
-            setup_bashrc_base
-            setup_bashrc_clean_scripts
-            setup_bashrc_clean_r2
+            setup_shell_rc_base
+            setup_shell_rc_clean_scripts
+            setup_shell_rc_clean_r2
             ;;
         3)
             echo -e "${YELLOW}[!] 已取消部署${RESET}"
@@ -775,8 +817,8 @@ run_deploy() {
             EXISTING_R2_BUCKET=$(get_existing_r2_value "R2_BUCKET_NAME")
             EXISTING_R2_ENDPOINT=$(get_existing_r2_value "R2_ENDPOINT_URL")
             EXISTING_R2_PUBLIC=$(get_existing_r2_value "R2_PUBLIC_URL")
-            setup_bashrc_base
-            setup_bashrc_clean_scripts
+            setup_shell_rc_base
+            setup_shell_rc_clean_scripts
             ;;
     esac
     echo
@@ -804,7 +846,7 @@ run_deploy() {
         configure_r2
     fi
 
-    # --- 写入 ~/.bashrc 区块（包含 R2 配置） ---
+    # --- 写入 Shell 配置区块（包含 R2 配置） ---
     write_linux_deploy_block
 
     # --- 配置 sudoers 免密 ---
@@ -812,7 +854,7 @@ run_deploy() {
 
     echo
     echo -e "${GREEN}=================================${RESET}"
-    echo -e "${GREEN}  部署完成！请执行 source ~/.bashrc ${RESET}"
+    echo -e "${GREEN}  部署完成！请执行 source $SHELL_RC_DISPLAY ${RESET}"
     echo -e "${GREEN}=================================${RESET}"
 }
 

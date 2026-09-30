@@ -31,6 +31,7 @@ echo
 # Gitee 仓库配置
 GITEE_OWNER="jacob_ng"
 GITEE_REPO="linux-deploy"
+GITHUB_OWNER="JacobNg1"
 
 # 解析参数：位置参数为分支名，--scripts 仅更新脚本
 SCRIPTS_ONLY=0
@@ -54,6 +55,13 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+DEPLOY_SHELL="$(ps -p "$PPID" -o comm= 2>/dev/null | tr -d ' ')"
+DEPLOY_SHELL="${DEPLOY_SHELL#-}"
+case "$DEPLOY_SHELL" in
+    bash|zsh) export DEPLOY_SHELL ;;
+    *) unset DEPLOY_SHELL ;;
+esac
 
 # 本地部署目录
 DEPLOY_DIR="$HOME/linux-deploy"
@@ -106,15 +114,26 @@ download_file() {
     local local_path="$2"
     local filename=$(basename "$local_path")
 
-    local raw_url="https://gitee.com/$GITEE_OWNER/$GITEE_REPO/raw/$GITEE_BRANCH/$file_path?cache_bust=$(date +%s%N)"
+    local gitee_url="https://gitee.com/$GITEE_OWNER/$GITEE_REPO/raw/$GITEE_BRANCH/$file_path?cache_bust=$(date +%s%N)"
+    local gitee_archive_url="https://gitee.com/$GITEE_OWNER/$GITEE_REPO/repository/archive/$GITEE_BRANCH.tar.gz"
+    local github_url="https://raw.githubusercontent.com/$GITHUB_OWNER/$GITEE_REPO/$GITEE_BRANCH/$file_path"
 
     echo -e "${BLUE}[*] 正在下载 $filename ...${RESET}"
 
-    if curl -fsSL "$raw_url" -o "$local_path"; then
+    if curl -fsSL "$gitee_url" -o "$local_path"; then
+        echo -e "${GREEN}[✓] $filename 下载成功${RESET}"
+        chmod +x "$local_path"
+    elif curl -fsSL "$gitee_archive_url" |
+         tar -xOzf - --wildcards "*/$file_path" > "$local_path"; then
+        echo -e "${YELLOW}[!] Gitee Raw 下载失败，已自动切换 Gitee 压缩包${RESET}"
+        echo -e "${GREEN}[✓] $filename 下载成功${RESET}"
+        chmod +x "$local_path"
+    elif curl -fsSL "$github_url" -o "$local_path"; then
+        echo -e "${YELLOW}[!] Gitee 下载失败，已自动切换 GitHub 镜像${RESET}"
         echo -e "${GREEN}[✓] $filename 下载成功${RESET}"
         chmod +x "$local_path"
     else
-        echo -e "${YELLOW}[!] $filename 下载失败${RESET}"
+        echo -e "${YELLOW}[!] $filename 从 Gitee 和 GitHub 下载均失败${RESET}"
         rm -f "$local_path"
         return 1
     fi

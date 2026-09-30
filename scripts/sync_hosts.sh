@@ -68,7 +68,7 @@ if [ "$USE_R2" -eq 1 ]; then
             exit 1
         fi
     else
-        [ "$QUIET" -ne 1 ] && echo "错误: R2 凭证或 Endpoint 未配置，不能使用 YOUR_R2_* 占位值" >&2
+        [ "$QUIET" -ne 1 ] && echo "错误: R2 凭证或 Endpoint 未配置，请在当前 Shell 配置文件中设置有效值" >&2
         exit 1
     fi
 fi
