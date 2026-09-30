@@ -11,46 +11,20 @@ RESET='\033[00m'
 # 脚本所在目录（兼容本地执行和在线下载执行）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-detect_interactive_shell() {
-    local pid="$PPID"
-    local comm
-    local stdin_path
-    local arg
-    local has_command_arg
-    local -a args
-
-    while [ "$pid" -gt 1 ] 2>/dev/null; do
-        comm="$(cat "/proc/$pid/comm" 2>/dev/null || true)"
-        comm="${comm#-}"
-
-        case "$comm" in
-            bash|zsh)
-                stdin_path="$(readlink "/proc/$pid/fd/0" 2>/dev/null || true)"
-                args=()
-                mapfile -d '' -t args < "/proc/$pid/cmdline" 2>/dev/null || true
-                has_command_arg=0
-                for arg in "${args[@]:1}"; do
-                    [[ "$arg" != -* ]] && has_command_arg=1
-                done
-
-                if [[ "$stdin_path" == /dev/tty* || "$stdin_path" == /dev/pts/* ]] &&
-                   [ "$has_command_arg" -eq 0 ]; then
-                    printf '%s\n' "$comm"
-                    return
-                fi
-                ;;
-        esac
-
-        pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
-        [ -z "$pid" ] && break
-    done
-
-    return 1
-}
-
 detect_shell_config() {
     local shell_name
-    shell_name="$(detect_interactive_shell || true)"
+    shell_name="${DEPLOY_SHELL:-}"
+
+    if [ -z "$shell_name" ]; then
+        shell_name="$(ps -p "$PPID" -o comm= 2>/dev/null | tr -d ' ')"
+        shell_name="${shell_name#-}"
+    fi
+
+    case "$shell_name" in
+        bash|zsh) ;;
+        *) shell_name="" ;;
+    esac
+
     [ -z "$shell_name" ] && shell_name="$(basename "${SHELL:-}")"
 
     if [ -z "$shell_name" ] && command -v getent >/dev/null 2>&1; then

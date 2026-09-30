@@ -56,6 +56,13 @@ for arg in "$@"; do
     esac
 done
 
+DEPLOY_SHELL="$(ps -p "$PPID" -o comm= 2>/dev/null | tr -d ' ')"
+DEPLOY_SHELL="${DEPLOY_SHELL#-}"
+case "$DEPLOY_SHELL" in
+    bash|zsh) export DEPLOY_SHELL ;;
+    *) unset DEPLOY_SHELL ;;
+esac
+
 # 本地部署目录
 DEPLOY_DIR="$HOME/linux-deploy"
 SCRIPTS_DIR="$HOME/scripts"
