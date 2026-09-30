@@ -101,7 +101,7 @@ jacob ALL=(ALL) NOPASSWD: /home/jacob/scripts/lan_scan.sh
 
 ## Shell 配置文件写入格式
 
-脚本根据 `$SHELL` 自动选择 `~/.bashrc` 或 `~/.zshrc`。所有自定义内容集中在 `# linux-deploy-start` / `# linux-deploy-end` 区块内，可完整重写：
+脚本优先识别当前交互式 Shell，并以 `$SHELL` 作为回退，自动选择 `~/.bashrc` 或 `~/.zshrc`。所有自定义内容集中在 `# linux-deploy-start` / `# linux-deploy-end` 区块内，可完整重写：
 
 ```bash
 # linux-deploy-start
