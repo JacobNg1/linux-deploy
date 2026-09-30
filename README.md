@@ -9,6 +9,7 @@ curl -fsSL "https://gitee.com/jacob_ng/linux-deploy/raw/main/install.sh" | bash
 ```
 
 安装过程中若 Gitee Raw 下载失败，会依次尝试 Gitee 分支压缩包和 GitHub 镜像。
+若系统未安装 Git，安装器会通过 APT 或 YUM 自动安装后继续部署。
 
 可选参数：
 

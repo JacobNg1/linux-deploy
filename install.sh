@@ -103,6 +103,7 @@ check_dependency() {
 }
 
 check_dependency curl curl
+check_dependency git git
 
 # 创建目录
 mkdir -p "$DEPLOY_DIR"
